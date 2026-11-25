@@ -1,15 +1,16 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("kotlin-kapt")
 }
 
 android {
-    namespace = "in.kidsafe.monitor"
+    namespace = "com.kidsafe.monitor"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "in.kidsafe.monitor"
+        applicationId = "com.kidsafe.monitor"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
@@ -45,10 +46,6 @@ android {
 
     buildFeatures {
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
     }
 
     packaging {
