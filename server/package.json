@@ -1,0 +1,8 @@
+{
+  "name": "kidsafe-parent-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Single-family parental usage reporting demo; no third-party npm dependencies",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" }
+}

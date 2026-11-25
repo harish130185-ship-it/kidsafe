@@ -1,0 +1,114 @@
+// Prisma Schema for KidSafe Activity Monitor
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ParentAccount {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  parentToken  String        @unique
+  name         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  children     ChildProfile[]
+}
+
+model ChildProfile {
+  id                String         @id @default(uuid())
+  parentId          String
+  parent            ParentAccount  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  name              String
+  age               Int
+  avatar            String         @default("default-avatar.png")
+  dailyLimitMinutes Int            @default(120)
+  createdAt         DateTime       @default(now())
+  devices           Device[]
+  reports           DailyReport[]
+  limits            AppLimit[]
+  alerts            Alert[]
+}
+
+model Device {
+  id           String       @id @default(uuid())
+  childId      String
+  child        ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  deviceToken  String       @unique
+  deviceName   String
+  deviceModel  String
+  androidVersion String
+  batteryLevel Int          @default(100)
+  isOnline     Boolean      @default(true)
+  lastSyncAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+}
+
+model DailyReport {
+  id                  String       @id @default(uuid())
+  childId             String
+  child               ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  day                 String       // YYYY-MM-DD
+  totalScreenTimeMs   BigInt       @default(0)
+  screenUnlocksApprox Int          @default(0)
+  receivedAt          DateTime     @default(now())
+  apps                AppUsage[]
+  timeline            TimelineItem[]
+
+  @@unique([childId, day])
+}
+
+model AppUsage {
+  id         String      @id @default(uuid())
+  reportId   String
+  report     DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  package    String
+  name       String
+  category   String
+  durationMs BigInt
+}
+
+model TimelineItem {
+  id         String      @id @default(uuid())
+  reportId   String
+  report     DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  package    String
+  name       String
+  event      String      // opened, closed, screen_unlocked, screen_off, limit_reached
+  time       BigInt
+  durationMs BigInt?
+  category   String
+  confidence String      // high, approximate
+  source     String      // UsageStats, Accessibility
+}
+
+model AppLimit {
+  id                String       @id @default(uuid())
+  childId           String
+  child             ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  package           String
+  name              String
+  category          String
+  dailyLimitMinutes Int
+  isBlocked         Boolean      @default(false)
+  scheduleStart     String?
+  scheduleEnd       String?
+
+  @@unique([childId, package])
+}
+
+model Alert {
+  id          String       @id @default(uuid())
+  childId     String
+  child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  type        String       // limit_reached, night_usage, permission_tamper, new_app
+  title       String
+  description String
+  severity    String       // info, warning, danger
+  timestamp   DateTime     @default(now())
+  isRead      Boolean      @default(false)
+}
