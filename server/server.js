@@ -198,10 +198,25 @@ async function ensureDbLoaded() {
         if (parsed && typeof parsed === 'object') {
           db = Object.assign(db, parsed);
           console.log('[Cloud KV] Successfully restored state from cloud store.');
+          return;
         }
       }
     } catch (e) {
       console.warn('[Cloud KV] Sync error:', e.message);
+    }
+  }
+
+  // Fallback to initial-data seed if database has no parents yet (e.g. fresh Vercel deploy)
+  if (!db.parents || db.parents.length === 0) {
+    try {
+      const seedFile = path.join(__dirname, 'initial-data.json');
+      if (fs.existsSync(seedFile)) {
+        const seedData = JSON.parse(fs.readFileSync(seedFile, 'utf8'));
+        db = Object.assign(db, seedData);
+        console.log('[Seed] Loaded baseline parent and device pairings from initial-data.json');
+      }
+    } catch (e) {
+      console.warn('[Seed] Warning loading initial-data.json:', e.message);
     }
   }
 }
@@ -211,21 +226,27 @@ try {
   if (fs.existsSync(dataFile)) {
     const loaded = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
     db = Object.assign(db, loaded);
-    if (!db.parents) db.parents = [];
-    if (!db.children) db.children = [];
-    if (!db.devices) db.devices = [];
-    if (!db.pairingSessions) db.pairingSessions = [];
-    if (!db.reports) db.reports = {};
-    if (!db.limits) db.limits = {};
-    if (!db.alerts) db.alerts = [];
-    if (!db.auditLogs) db.auditLogs = [];
-    if (!db.settings) db.settings = {};
+  } else {
+    const seedFile = path.join(__dirname, 'initial-data.json');
+    if (fs.existsSync(seedFile)) {
+      const seedData = JSON.parse(fs.readFileSync(seedFile, 'utf8'));
+      db = Object.assign(db, seedData);
+    }
   }
+  if (!db.parents) db.parents = [];
+  if (!db.children) db.children = [];
+  if (!db.devices) db.devices = [];
+  if (!db.pairingSessions) db.pairingSessions = [];
+  if (!db.reports) db.reports = {};
+  if (!db.limits) db.limits = {};
+  if (!db.alerts) db.alerts = [];
+  if (!db.auditLogs) db.auditLogs = [];
+  if (!db.settings) db.settings = {};
 } catch (e) {
   console.error('Failed reading database file, using clean DB:', e.message);
 }
 
-function saveDatabase() {
+async function saveDatabase() {
   try {
     const temp = dataFile + '.tmp';
     fs.writeFileSync(temp, JSON.stringify(db, null, 2), { mode: 0o600 });
@@ -235,7 +256,11 @@ function saveDatabase() {
   }
 
   if (KV_URL && KV_TOKEN) {
-    executeKv(['SET', 'kidsafe_database', JSON.stringify(db)]).catch(() => {});
+    try {
+      await executeKv(['SET', 'kidsafe_database', JSON.stringify(db)]);
+    } catch (e) {
+      console.warn('[Cloud KV Save Error]:', e.message);
+    }
   }
 }
 
@@ -692,7 +717,7 @@ async function requestHandler(req, res) {
           createdAt: Date.now()
         };
         db.parents.push(parent);
-        saveDatabase();
+        await saveDatabase();
       }
 
       otpStore.delete(phone);
@@ -707,7 +732,7 @@ async function requestHandler(req, res) {
         details: `Signed in via mobile OTP: ${phone}`,
         timestamp: Date.now()
       });
-      saveDatabase();
+      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
@@ -773,7 +798,7 @@ async function requestHandler(req, res) {
         if (name) parent.name = name;
         if (picture) parent.picture = picture;
       }
-      saveDatabase();
+      await saveDatabase();
 
       const token = createToken(parent.id);
 
@@ -784,7 +809,7 @@ async function requestHandler(req, res) {
         details: `Verified Google account: ${email} (${name})`,
         timestamp: Date.now()
       });
-      saveDatabase();
+      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
@@ -839,7 +864,7 @@ async function requestHandler(req, res) {
         createdAt: Date.now()
       };
       db.parents.push(parent);
-      saveDatabase();
+      await saveDatabase();
 
       const token = createToken(parent.id);
       db.auditLogs.unshift({
@@ -849,7 +874,7 @@ async function requestHandler(req, res) {
         details: `Account registered for ${email}.`,
         timestamp: Date.now()
       });
-      saveDatabase();
+      await saveDatabase();
 
       return respond(res, 201, {
         ok: true,
@@ -878,7 +903,7 @@ async function requestHandler(req, res) {
         // First-time password set for legacy parent
         parent.salt = crypto.randomBytes(16).toString('hex');
         parent.passwordHash = hashPassword(password, parent.salt);
-        saveDatabase();
+        await saveDatabase();
       } else {
         const computedHash = hashPassword(password, parent.salt);
         if (!equal(computedHash, parent.passwordHash)) {
@@ -894,7 +919,7 @@ async function requestHandler(req, res) {
         details: `Password verified for ${email}.`,
         timestamp: Date.now()
       });
-      saveDatabase();
+      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
@@ -983,7 +1008,7 @@ async function requestHandler(req, res) {
         createdAt: Date.now()
       };
       db.pairingSessions.push(session);
-      saveDatabase();
+      await saveDatabase();
 
       // Host for QR code and pairing connection (auto-detects https / proxy)
       const proto = req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http');
@@ -1022,7 +1047,7 @@ async function requestHandler(req, res) {
 
       if (Date.now() > session.expiresAt) {
         session.status = 'expired';
-        saveDatabase();
+        await saveDatabase();
         return respond(res, 400, { error: 'This pairing code has expired. Please generate a new one on the parent dashboard.' });
       }
 
@@ -1076,7 +1101,7 @@ async function requestHandler(req, res) {
         timestamp: Date.now()
       });
 
-      saveDatabase();
+      await saveDatabase();
 
       // Broadcast real-time event to parent dashboard!
       broadcastEvent('device_paired', {
@@ -1136,7 +1161,7 @@ async function requestHandler(req, res) {
       if (!device) return respond(res, 404, { error: 'Device not found' });
 
       device.isRevoked = true;
-      saveDatabase();
+      await saveDatabase();
 
       broadcastEvent('device_revoked', { deviceId: device.id, childId: device.childId });
       return respond(res, 200, { ok: true, message: 'Device access revoked' });
@@ -1174,7 +1199,7 @@ async function requestHandler(req, res) {
       };
       db.children.push(newChild);
       db.limits[newChild.id] = [];
-      saveDatabase();
+      await saveDatabase();
       broadcastEvent('child_added', { child: newChild });
       return respond(res, 201, { ok: true, child: newChild });
     }
@@ -1206,7 +1231,7 @@ async function requestHandler(req, res) {
       db.pairingSessions = (db.pairingSessions || []).filter(s => s.childId !== childId);
       db.devices = (db.devices || []).filter(d => d.childId !== childId);
 
-      saveDatabase();
+      await saveDatabase();
       broadcastEvent('child_deleted', { childId, childName: removed.name });
 
       return respond(res, 200, { ok: true, message: `Child profile ${removed.name} removed successfully`, childId });
@@ -1452,7 +1477,7 @@ async function requestHandler(req, res) {
           isBlocked: Boolean(isBlocked)
         });
       }
-      saveDatabase();
+      await saveDatabase();
       broadcastEvent('limits_updated', { childId, limits: db.limits[childId] });
       return respond(res, 200, { ok: true, limits: db.limits[childId] });
     }
@@ -1462,7 +1487,7 @@ async function requestHandler(req, res) {
       const body = JSON.parse(await read(req));
       const alert = db.alerts.find(a => a.id === body.alertId);
       if (alert) alert.isRead = true;
-      saveDatabase();
+      await saveDatabase();
       broadcastEvent('alert_read', { alertId: body.alertId });
       return respond(res, 200, { ok: true });
     }
@@ -1509,7 +1534,7 @@ async function requestHandler(req, res) {
       const body = JSON.parse(await read(req));
       const days = Number(body.days || body.retentionDays) || 30;
       db.settings.dataRetentionDays = days;
-      saveDatabase();
+      await saveDatabase();
       return respond(res, 200, { ok: true, dataRetentionDays: days });
     }
 
@@ -1539,8 +1564,47 @@ async function requestHandler(req, res) {
       if (typeof body.twilioSid === 'string') db.settings.twilioSid = body.twilioSid.trim();
       if (typeof body.twilioToken === 'string') db.settings.twilioToken = body.twilioToken.trim();
       if (typeof body.twilioPhoneNumber === 'string') db.settings.twilioPhoneNumber = body.twilioPhoneNumber.trim();
-      saveDatabase();
+      await saveDatabase();
       return respond(res, 200, { ok: true, message: 'SMS Gateway settings updated successfully.' });
+    }
+
+    // 21c. SETTINGS: Database Persistence & Storage Status
+    if (req.method === 'GET' && pathname === '/api/database/status') {
+      const parent = getSessionParent(req);
+      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
+      return respond(res, 200, {
+        ok: true,
+        isKvActive: !!(KV_URL && KV_TOKEN),
+        kvProvider: KV_URL ? (KV_URL.includes('upstash') ? 'Upstash Redis' : 'Cloud KV') : 'Baseline Seed & Ephemeral Container',
+        isVercel,
+        parentCount: (db.parents || []).length,
+        childCount: (db.children || []).length,
+        deviceCount: (db.devices || []).length
+      });
+    }
+
+    // 21d. SETTINGS: Database Backup Export
+    if (req.method === 'GET' && pathname === '/api/database/backup') {
+      const parent = getSessionParent(req);
+      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="kidsafe-backup-${Date.now()}.json"`
+      });
+      return res.end(JSON.stringify(db, null, 2));
+    }
+
+    // 21e. SETTINGS: Database Backup Restore
+    if (req.method === 'POST' && pathname === '/api/database/restore') {
+      const parent = getSessionParent(req);
+      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
+      const body = JSON.parse(await read(req));
+      if (!body || typeof body !== 'object' || !Array.isArray(body.parents)) {
+        return respond(res, 400, { error: 'Invalid database backup JSON structure.' });
+      }
+      db = Object.assign(db, body);
+      await saveDatabase();
+      return respond(res, 200, { ok: true, message: 'Database successfully restored.' });
     }
 
     // 22. SETTINGS: Delete Parent Account & All Associated Data
@@ -1555,7 +1619,7 @@ async function requestHandler(req, res) {
       db.limits = {};
       db.devices = [];
       db.pairingSessions = [];
-      saveDatabase();
+      await saveDatabase();
 
       return respond(res, 200, { ok: true, message: 'Account and all data permanently deleted' }, 'application/json', {
         'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
@@ -1689,7 +1753,7 @@ async function requestHandler(req, res) {
         }
       }
 
-      saveDatabase();
+      await saveDatabase();
 
       // Broadcast telemetry update via Server-Sent Events to both event channels!
       const eventPayload = {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,22 +19,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kidsafe.monitor.UsageCollector
 import com.kidsafe.monitor.data.remote.ApiClient
 import com.kidsafe.monitor.data.remote.ClaimPairingRequest
+import com.kidsafe.monitor.data.remote.PasswordLoginRequest
 import com.kidsafe.monitor.service.MonitorManager
 import com.kidsafe.monitor.ui.theme.*
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
 import java.util.UUID
 
 @Composable
-fun ChildConsentScreen() {
+fun ChildConsentScreen(
+    onNavigateHome: () -> Unit = {}
+) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kidsafe_prefs", Context.MODE_PRIVATE) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Guardian Authentication Gate State
+    var isGuardianUnlocked by remember { mutableStateOf(false) }
+    var loginEmail by remember {
+        mutableStateOf(prefs.getString("parent_email", "harishshukla1385@gmail.com") ?: "harishshukla1385@gmail.com")
+    }
+    var loginPassword by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isAuthenticating by remember { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf<String?>(null) }
+
+    // Device Setup State
     var isMonitoringActive by remember { mutableStateOf(MonitorManager.isConsentGranted(context)) }
     var hasUsageAccess by remember { mutableStateOf(UsageCollector.granted(context)) }
     var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in") }
@@ -49,6 +69,207 @@ fun ChildConsentScreen() {
 
     val scrollState = rememberScrollState()
 
+    // Helper to calculate SHA-256
+    fun sha256(input: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val bytes = md.digest(input.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    // ==========================================
+    // 1. GUARDIAN LOGIN VERIFICATION GATE
+    // ==========================================
+    if (!isGuardianUnlocked) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(24.dp)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Lock Icon Badge
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .background(IndigoPrimary.copy(alpha = 0.12f), shape = RoundedCornerShape(38.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Security Lock",
+                    tint = IndigoPrimary,
+                    modifier = Modifier.size(38.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Guardian Authentication",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Device Setup & Monitoring settings are password protected. Enter your KidSafe Parent Account credentials to proceed.",
+                fontSize = 13.sp,
+                color = MutedText,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Login Card
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    OutlinedTextField(
+                        value = loginEmail,
+                        onValueChange = { loginEmail = it },
+                        label = { Text("Parent Email") },
+                        placeholder = { Text("parent@example.com") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Email, contentDescription = null, tint = IndigoPrimary)
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = loginPassword,
+                        onValueChange = {
+                            loginPassword = it
+                            if (loginError != null) loginError = null
+                        },
+                        label = { Text("Parent Password") },
+                        leadingIcon = {
+                            Icon(Icons.Default.VpnKey, contentDescription = null, tint = IndigoPrimary)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (isPasswordVisible) "Hide password" else "Show password",
+                                    tint = MutedText
+                                )
+                            }
+                        },
+                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (loginError != null) {
+                        Text(
+                            text = loginError!!,
+                            color = DangerRed,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            val email = loginEmail.trim().lowercase()
+                            val pwd = loginPassword.trim()
+
+                            if (email.isEmpty() || pwd.isEmpty()) {
+                                loginError = "Please enter both email and password"
+                                return@Button
+                            }
+
+                            isAuthenticating = true
+                            loginError = null
+
+                            coroutineScope.launch {
+                                try {
+                                    val api = ApiClient.create(serverUrl)
+                                    val resp = api.loginWithPassword(PasswordLoginRequest(email, pwd))
+
+                                    if (resp.isSuccessful && resp.body()?.ok == true) {
+                                        // Cache hash and email for offline fallback
+                                        val hash = sha256(pwd)
+                                        prefs.edit()
+                                            .putString("parent_email", email)
+                                            .putString("guardian_pwd_hash", hash)
+                                            .apply()
+                                        isGuardianUnlocked = true
+                                    } else {
+                                        loginError = resp.body()?.error ?: "Invalid email or password"
+                                    }
+                                } catch (e: Exception) {
+                                    // Offline fallback check:
+                                    val hash = sha256(pwd)
+                                    val cachedHash = prefs.getString("guardian_pwd_hash", "") ?: ""
+                                    val cachedEmail = prefs.getString("parent_email", "") ?: ""
+
+                                    if (cachedHash.isNotEmpty() && hash == cachedHash &&
+                                        (cachedEmail.isEmpty() || cachedEmail.equals(email, ignoreCase = true))
+                                    ) {
+                                        isGuardianUnlocked = true
+                                    } else {
+                                        loginError = "Connection error: ${e.message ?: "Unable to verify"}. If offline, ensure password was verified online previously."
+                                    }
+                                } finally {
+                                    isAuthenticating = false
+                                }
+                            }
+                        },
+                        enabled = !isAuthenticating,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        if (isAuthenticating) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Verifying Guardian...")
+                        } else {
+                            Text("Unlock Device Setup", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { onNavigateHome() },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancel (Return to Dashboard)", color = MutedText)
+            }
+        }
+        return
+    }
+
+    // ==========================================
+    // 2. UNLOCKED DEVICE SETUP SCREEN
+    // ==========================================
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -57,6 +278,51 @@ fun ChildConsentScreen() {
             .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Guardian Status Bar with Lock Button
+        Card(
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.12f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LockOpen,
+                        contentDescription = null,
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Guardian Access Active",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SuccessGreen
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        isGuardianUnlocked = false
+                        loginPassword = ""
+                        onNavigateHome()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("🔒 Lock & Exit", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         // App Title
         Text(
             text = "KidSafe Child Device Setup",

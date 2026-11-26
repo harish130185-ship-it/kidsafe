@@ -208,6 +208,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
     if (targetTab === 'tab-devices') {
       loadDevices();
+    } else if (targetTab === 'tab-settings') {
+      loadDbPersistenceStatus();
     }
   };
 });
@@ -1220,6 +1222,76 @@ $('deleteAccountBtn').onclick = async () => {
     showToast(err.message || 'Action failed', 'error');
   }
 };
+
+// --- DATABASE PERSISTENCE & BACKUPS ---
+async function loadDbPersistenceStatus() {
+  try {
+    const res = await api('/api/database/status');
+    const badge = $('dbPersistenceBadge');
+    const note = $('dbPersistenceNote');
+    if (!badge) return;
+    if (res.isKvActive) {
+      badge.className = 'status-pill ok';
+      badge.textContent = `● Persistent Cloud Active (${res.kvProvider})`;
+      note.textContent = `Permanent Cloud storage is connected. Your account (${res.parentCount} guardian(s)), ${res.childCount} child profile(s), and ${res.deviceCount} paired device(s) are permanently preserved across all deployments.`;
+    } else {
+      badge.className = 'status-pill pending';
+      badge.textContent = '● Baseline Seed Active';
+      note.textContent = `Baseline accounts & pairings are preserved in initial seed. To persist live edits across future Vercel deployments, connect Upstash Redis in your Vercel Dashboard (Storage -> Create -> Redis).`;
+    }
+  } catch (err) {
+    // non-fatal
+  }
+}
+
+if ($('downloadDbBackupBtn')) {
+  $('downloadDbBackupBtn').onclick = async () => {
+    try {
+      const token = state.sessionToken || sessionStorage.getItem('kidsafe_session');
+      const res = await fetch('/api/database/backup', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Backup failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `kidsafe-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      showToast('Database backup downloaded successfully', 'success');
+    } catch (e) {
+      showToast(e.message || 'Failed to download backup', 'error');
+    }
+  };
+}
+
+if ($('restoreDbFileInput')) {
+  $('restoreDbFileInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = $('dbBackupStatusMsg');
+    if (!confirm(`Are you sure you want to restore database from "${file.name}"? This will update parent and child records.`)) {
+      e.target.value = '';
+      return;
+    }
+    try {
+      if (msg) { msg.textContent = 'Restoring database...'; msg.style.color = 'var(--primary)'; }
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await api('/api/database/restore', {
+        method: 'POST',
+        body: JSON.stringify(parsed)
+      });
+      if (msg) { msg.textContent = 'Database restored successfully! Reloading...'; msg.style.color = 'var(--success)'; }
+      showToast('Database restored successfully', 'success');
+      setTimeout(() => location.reload(), 1200);
+    } catch (err) {
+      if (msg) { msg.textContent = 'Restore failed: ' + err.message; msg.style.color = 'var(--danger)'; }
+      showToast(err.message || 'Failed to restore', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+}
 
 // --- STARTUP ENTRY POINT ---
 // Always start with the Login Form when opening the website

@@ -693,6 +693,33 @@
         </p>
       </div>
 
+      <!-- Database Persistence & Cloud Storage -->
+      <div class="panel" style="margin-bottom: 24px; border-left: 4px solid var(--primary);">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title">Database Persistence & Cloud Storage</h3>
+            <span class="panel-subtitle">Manage account persistence and cloud backups across deployments</span>
+          </div>
+          <span id="dbPersistenceBadge" class="status-pill ok">● Storage Active</span>
+        </div>
+
+        <div style="margin-top: 10px; font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+          <p id="dbPersistenceNote" style="margin-bottom: 12px;">
+            Your account registrations and child device pairings are securely preserved in the primary database seed. To ensure 100% lifetime persistence across all serverless deployments, Upstash Redis / Vercel KV is integrated.
+          </p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button id="downloadDbBackupBtn" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px;">
+              📥 Download Database Backup (JSON)
+            </button>
+            <label class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px; cursor: pointer; margin-bottom: 0;">
+              📤 Restore Database Backup
+              <input type="file" id="restoreDbFileInput" accept=".json" style="display: none;">
+            </label>
+          </div>
+          <div id="dbBackupStatusMsg" style="font-size: 13px; font-weight: 600; margin-top: 8px;"></div>
+        </div>
+      </div>
+
       <!-- Danger Zone -->
       <div class="panel" style="border: 1px solid var(--danger-light); background: #FFF5F5;">
         <div class="panel-header">

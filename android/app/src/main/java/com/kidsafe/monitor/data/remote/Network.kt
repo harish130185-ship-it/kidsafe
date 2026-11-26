@@ -71,6 +71,17 @@ data class ClaimPairingResponse(
     @SerializedName("error") val error: String?
 )
 
+data class PasswordLoginRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String
+)
+
+data class PasswordLoginResponse(
+    @SerializedName("ok") val ok: Boolean,
+    @SerializedName("token") val token: String? = null,
+    @SerializedName("error") val error: String? = null
+)
+
 interface KidSafeApiService {
     @POST("api/upload")
     suspend fun uploadReport(
@@ -88,6 +99,11 @@ interface KidSafeApiService {
     suspend fun claimPairing(
         @Body request: ClaimPairingRequest
     ): Response<ClaimPairingResponse>
+
+    @POST("api/auth/password-login")
+    suspend fun loginWithPassword(
+        @Body request: PasswordLoginRequest
+    ): Response<PasswordLoginResponse>
 }
 
 object ApiClient {

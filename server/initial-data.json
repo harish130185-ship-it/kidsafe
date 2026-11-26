@@ -1,0 +1,416 @@
+{
+  "parents": [
+    {
+      "id": "parent-1795610976201",
+      "phone": "+918000119735",
+      "displayPhone": "+91 80001 19735",
+      "name": "Parent Guardian",
+      "language": "en",
+      "theme": "light",
+      "createdAt": 1795610976204
+    },
+    {
+      "id": "parent-1795612013190",
+      "phone": "+919876543210",
+      "displayPhone": "+91 98765 43210",
+      "name": "Parent Guardian",
+      "language": "en",
+      "theme": "light",
+      "createdAt": 1795612013190
+    },
+    {
+      "id": "parent-google-1795613639311",
+      "googleId": "1795613639311",
+      "email": "haris.parent@gmail.com",
+      "name": "Haris Parent",
+      "picture": "",
+      "phone": "haris.parent@gmail.com",
+      "displayPhone": "haris.parent@gmail.com",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "google",
+      "createdAt": 1795613639311
+    },
+    {
+      "id": "parent-google-1795613678285",
+      "googleId": "1795613678285",
+      "email": "harish130185@gmail.com",
+      "name": "Harish",
+      "picture": "",
+      "phone": "harish130185@gmail.com",
+      "displayPhone": "harish130185@gmail.com",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "google",
+      "createdAt": 1795613678285
+    },
+    {
+      "id": "parent-2fa-1795614219511",
+      "email": "haris.test@gmail.com",
+      "phone": "haris.test@gmail.com",
+      "displayPhone": "haris.test@gmail.com",
+      "name": "haris.test",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "2fa_totp",
+      "is2FaActive": true,
+      "salt": "bafcceec8c41aee29f9d585546e4920d",
+      "passwordHash": "8a89f0d6040ee502948ebb2dadf8bd1539000ffd51fa43579b26460b6e4430d2b850cf093ffe6ea1fbba15330a51c31a9f98c98450226057a9ab9d07299cfe1a",
+      "totpSecret": "JVVWKRIIXW6QVB6EAZONYXI2JFICDEUX",
+      "createdAt": 1795614219511
+    },
+    {
+      "id": "parent-1795668944873",
+      "email": "harishshukla1385@gmail.com",
+      "phone": "harishshukla1385@gmail.com",
+      "displayPhone": "harishshukla1385@gmail.com",
+      "name": "Harish Shukla",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "44bd50362bdab54913461e072e33a32f",
+      "passwordHash": "7da8323cfae7f3416115ae98969f2881480508228a23a3b75ee993bae06ecd5382b843ee0c7b9b160f65247e2d42d83c6bcdc24dccd179214c5b58cc7713f24e",
+      "createdAt": 1795668944873
+    },
+    {
+      "id": "parent-1795669031777",
+      "email": "testparent@kidsafe.com",
+      "phone": "testparent@kidsafe.com",
+      "displayPhone": "testparent@kidsafe.com",
+      "name": "Haris Test Parent",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "5e2e90dfffa8e30da6a7b1eaec1937cf",
+      "passwordHash": "6aba8cd76d5244eb55b8f3ac3a578977e891bb335dc578ea78af257a96e7c80328b30841aec783536aef1015c09aeb4cb9b4dd926b2d6e0434a7c0daab7dafb7",
+      "createdAt": 1795669031777
+    },
+    {
+      "id": "parent-1795677269626",
+      "email": "verceltest@kidsafe.com",
+      "phone": "verceltest@kidsafe.com",
+      "displayPhone": "verceltest@kidsafe.com",
+      "name": "Vercel Parent",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "f10b941d82193cd70bbaf4ee86c00f8c",
+      "passwordHash": "cc5dd865200737ca67a4ccd9ef81caf5a8e9f25d89097cbdb6234fba8adbb0bbf177427c074c5a4ad47d6c8f7f4fcf9339564d1e734e0c0d7a6ca89b3aebf47b",
+      "createdAt": 1795677269626
+    },
+    {
+      "id": "parent-1795682335979",
+      "email": "testsim@kidsafe.com",
+      "phone": "testsim@kidsafe.com",
+      "displayPhone": "testsim@kidsafe.com",
+      "name": "Simulated Parent",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "4f2021a5660cc2e90c7700a43d89651b",
+      "passwordHash": "b2a27ab1e6bcd3c6fcfbef800fe387b6b7c8db929ec18db8b4c8511f0ac086a6d7d0f8216bedacae189cc37e1991b14310aec5b40522d8558b22397de21523cc",
+      "createdAt": 1795682335979
+    }
+  ],
+  "children": [
+    {
+      "id": "child-1795611779978",
+      "parentId": "parent-1795610976201",
+      "name": "Himanshu",
+      "age": 10,
+      "avatar": "himanshu",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795611814441",
+      "parentId": "parent-1795610976201",
+      "name": "Himanshu",
+      "age": 10,
+      "avatar": "himanshu",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795668974183",
+      "parentId": "parent-1795668944873",
+      "name": "Devanshi",
+      "age": 10,
+      "avatar": "devanshi",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795669075214",
+      "parentId": "parent-1795669031777",
+      "name": "Aman",
+      "age": 10,
+      "avatar": "👦",
+      "deviceName": "Samsung Galaxy M34",
+      "deviceModel": "SM-M346B",
+      "batteryLevel": 100,
+      "isOnline": true,
+      "lastSyncAt": 1795669253284,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795672677494",
+      "parentId": "parent-1795668944873",
+      "name": "Devanshi",
+      "age": 10,
+      "avatar": "devanshi",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    }
+  ],
+  "devices": [
+    {
+      "id": "dev-1795669253283",
+      "childId": "child-1795669075214",
+      "parentId": "parent-1795669031777",
+      "deviceName": "Samsung Galaxy M34",
+      "deviceModel": "SM-M346B",
+      "androidVersion": "Android 14",
+      "appGuid": "5c4fd9fb-96e4-4a97-818d-c45911da5e0b",
+      "token": "0e5a2de2b6bc13376fed3ff8e7444755eb4096a4aaa2dc61de84ab6a49228c77",
+      "pairedAt": 1795669253284,
+      "lastSyncAt": 1795669253284,
+      "batteryLevel": 88,
+      "isRevoked": false
+    }
+  ],
+  "pairingSessions": [
+    {
+      "id": "pair-1795611779978",
+      "parentId": "parent-1795610976201",
+      "childId": "child-1795611779978",
+      "childName": "Himanshu",
+      "code": "KS-6951",
+      "codeHash": "f5811a23b29d7b1acf7a1730b6fbe0863f49a0232d3ebb7f47f8ce1e4ba238c2",
+      "expiresAt": 1795612379978,
+      "status": "pending",
+      "createdAt": 1795611779978
+    },
+    {
+      "id": "pair-1795611814441",
+      "parentId": "parent-1795610976201",
+      "childId": "child-1795611814441",
+      "childName": "Himanshu",
+      "code": "KS-2180",
+      "codeHash": "b3284f17a7df852da025dccd60133f0b090ee66e1e5398e88f3cc2b86932e82d",
+      "expiresAt": 1795612414441,
+      "status": "pending",
+      "createdAt": 1795611814441
+    },
+    {
+      "id": "pair-1795668974183",
+      "parentId": "parent-1795668944873",
+      "childId": "child-1795668974183",
+      "childName": "Devanshi",
+      "code": "KS-4064",
+      "codeHash": "366cb2d0157f8a917b32a39029fea99c02d77006c546d0310dc3189999d52218",
+      "expiresAt": 1795669574183,
+      "status": "pending",
+      "createdAt": 1795668974184
+    },
+    {
+      "id": "pair-1795669253279",
+      "parentId": "parent-1795669031777",
+      "childId": "child-1795669075214",
+      "childName": "Aman",
+      "code": "KS-7523",
+      "codeHash": "106033b15d8386822f73bdaafe862d3e7eb92184e63ca16b1ada0bd0da7c4cdb",
+      "expiresAt": 1795669853279,
+      "status": "consumed",
+      "createdAt": 1795669253279,
+      "consumedAt": 1795669253284,
+      "deviceId": "dev-1795669253283"
+    },
+    {
+      "id": "pair-1795672677535",
+      "parentId": "parent-1795668944873",
+      "childId": "child-1795672677494",
+      "childName": "Devanshi",
+      "code": "KS-7351",
+      "codeHash": "dd9b13e379d893ad6ce6f33d58b5f57144edbc50c899fd6b16c29142250ed428",
+      "expiresAt": 1795673277534,
+      "status": "pending",
+      "createdAt": 1795672677544
+    }
+  ],
+  "reports": {},
+  "limits": {
+    "child-1795611779978": [],
+    "child-1795611814441": [],
+    "child-1795668974183": [],
+    "child-1795669075214": [],
+    "child-1795672677494": []
+  },
+  "alerts": [],
+  "auditLogs": [
+    {
+      "id": "audit-1795682336078",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testsim@kidsafe.com.",
+      "timestamp": 1795682336078
+    },
+    {
+      "id": "audit-1795682335981",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for testsim@kidsafe.com.",
+      "timestamp": 1795682335981
+    },
+    {
+      "id": "audit-1795677269630",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for verceltest@kidsafe.com.",
+      "timestamp": 1795677269630
+    },
+    {
+      "id": "audit-1795669365851",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669365851
+    },
+    {
+      "id": "audit-1795669253284",
+      "type": "device_paired",
+      "title": "New Device Paired",
+      "details": "Samsung Galaxy M34 (SM-M346B) was successfully paired to Aman.",
+      "timestamp": 1795669253284
+    },
+    {
+      "id": "audit-1795669253267",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669253267
+    },
+    {
+      "id": "audit-1795669075204",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669075204
+    },
+    {
+      "id": "audit-1795669046875",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669046875
+    },
+    {
+      "id": "audit-1795669031926",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669031926
+    },
+    {
+      "id": "audit-1795669031778",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for testparent@kidsafe.com.",
+      "timestamp": 1795669031778
+    },
+    {
+      "id": "audit-1795668944875",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for harishshukla1385@gmail.com.",
+      "timestamp": 1795668944875
+    },
+    {
+      "id": "audit-1795668472103",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795668472103
+    },
+    {
+      "id": "audit-1795614611914",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795614611914
+    },
+    {
+      "id": "audit-1795614341986",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795614341986
+    },
+    {
+      "id": "audit-1795614219904",
+      "type": "parent_2fa_login",
+      "title": "Parent Signed In with 2FA",
+      "details": "Password & 2FA verified for haris.test@gmail.com.",
+      "timestamp": 1795614219904
+    },
+    {
+      "id": "audit-1795614219513",
+      "type": "parent_2fa_setup",
+      "title": "Google Authenticator 2FA Configured",
+      "details": "Two-factor authentication successfully enabled for haris.test@gmail.com.",
+      "timestamp": 1795614219513
+    },
+    {
+      "id": "audit-1795613678287",
+      "type": "parent_google_login",
+      "title": "Parent Signed In via Google",
+      "details": "Verified Google account: harish130185@gmail.com (Harish)",
+      "timestamp": 1795613678287
+    },
+    {
+      "id": "audit-1795613639312",
+      "type": "parent_google_login",
+      "title": "Parent Signed In via Google",
+      "details": "Verified Google account: haris.parent@gmail.com (Haris Parent)",
+      "timestamp": 1795613639312
+    },
+    {
+      "id": "audit-1795612013192",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +919876543210",
+      "timestamp": 1795612013192
+    },
+    {
+      "id": "audit-1795611769628",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795611769628
+    }
+  ],
+  "settings": {
+    "dataRetentionDays": 30,
+    "autoPrune": true,
+    "fast2smsApiKey": "",
+    "twilioSid": "",
+    "twilioToken": "",
+    "twilioPhoneNumber": ""
+  }
+}

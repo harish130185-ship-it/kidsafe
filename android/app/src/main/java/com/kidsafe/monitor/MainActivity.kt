@@ -100,7 +100,17 @@ class MainActivity : ComponentActivity() {
                             TimelineScreen(onBack = { navController.popBackStack() })
                         }
                         composable(Screen.ChildSetup.route) {
-                            ChildConsentScreen()
+                            ChildConsentScreen(
+                                onNavigateHome = {
+                                    navController.navigate(Screen.ParentHome.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
                         }
                     }
                 }
