@@ -42,6 +42,7 @@ object MonitorManager {
         if (granted) {
             showPersistentNotification(context)
             schedulePeriodicSync(context)
+            syncNow(context)
         } else {
             stopMonitoring(context)
         }
@@ -109,6 +110,24 @@ object MonitorManager {
         )
     }
 
+    fun syncNow(context: Context) {
+        if (!isConsentGranted(context)) return
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val oneTimeRequest = OneTimeWorkRequestBuilder<KidSafeSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "kidsafe_instant_sync_work",
+            ExistingWorkPolicy.REPLACE,
+            oneTimeRequest
+        )
+    }
+
     fun stopMonitoring(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -131,21 +150,37 @@ class KidSafeSyncWorker(
             // 1. Collect real UsageStats
             val todayReport = UsageCollector.collectToday(context)
             val day = todayReport.getString("day")
-            val unlocks = todayReport.getInt("screenUnlocksApprox")
+            val rawUnlocks = todayReport.getInt("screenUnlocksApprox")
+            val rawScreenTime = todayReport.optLong("totalScreenTimeMs", 0L)
 
-            // 2. Cache in Room Database
+            // 2. Cache in Room Database with Lock/Idle Preservation
             val db = AppDatabase.getInstance(context)
-            val entity = DailyReportEntity(
-                day = day,
-                totalScreenTimeMs = todayReport.optLong("totalScreenTimeMs", 0L),
-                screenUnlocksApprox = unlocks,
-                payloadJson = todayReport.toString(),
-                updatedAt = System.currentTimeMillis()
-            )
-            db.activityDao().insertReport(entity)
+            val cachedReport = db.activityDao().getReport(day)
+
+            var activeReportJson = todayReport
+            var finalScreenTime = rawScreenTime
+            var finalUnlocks = rawUnlocks
+
+            // If phone is currently locked or usageStats returned 0ms, preserve previous valid usage
+            if (rawScreenTime == 0L && cachedReport != null && cachedReport.totalScreenTimeMs > 0L) {
+                try {
+                    activeReportJson = org.json.JSONObject(cachedReport.payloadJson)
+                    finalScreenTime = cachedReport.totalScreenTimeMs
+                    finalUnlocks = Math.max(rawUnlocks, cachedReport.screenUnlocksApprox)
+                } catch (_: Exception) {}
+            } else {
+                val entity = DailyReportEntity(
+                    day = day,
+                    totalScreenTimeMs = finalScreenTime,
+                    screenUnlocksApprox = finalUnlocks,
+                    payloadJson = activeReportJson.toString(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.activityDao().insertReport(entity)
+            }
 
             // Cache timeline events
-            val timelineArray = todayReport.getJSONArray("timeline")
+            val timelineArray = activeReportJson.optJSONArray("timeline") ?: org.json.JSONArray()
             val timelineList = mutableListOf<TimelineEventEntity>()
             for (i in 0 until timelineArray.length()) {
                 val obj = timelineArray.getJSONObject(i)
@@ -164,7 +199,9 @@ class KidSafeSyncWorker(
                     )
                 )
             }
-            db.activityDao().insertTimelineEvents(timelineList)
+            if (timelineList.isNotEmpty()) {
+                db.activityDao().insertTimelineEvents(timelineList)
+            }
 
             // 3. Sync to Backend if Server URL and Device Token are configured
             val prefs = context.getSharedPreferences("kidsafe_prefs", Context.MODE_PRIVATE)
@@ -175,12 +212,19 @@ class KidSafeSyncWorker(
             if (serverUrl.startsWith("http") && deviceToken.isNotBlank()) {
                 val api = ApiClient.create(serverUrl)
 
-                // Battery level
-                val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-                val batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
+                // Read real battery level accurately
+                val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+                val cap = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                val batteryLevel = if (cap in 1..100) cap else {
+                    val bFilter = android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                    val bIntent = context.registerReceiver(null, bFilter)
+                    val level = bIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                    val scale = bIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+                    if (level >= 0 && scale > 0) ((level / scale.toFloat()) * 100).toInt().coerceIn(1, 100) else 75
+                }
 
                 // Convert to remote models
-                val appsArray = todayReport.getJSONArray("apps")
+                val appsArray = activeReportJson.optJSONArray("apps") ?: org.json.JSONArray()
                 val remoteApps = mutableListOf<RemoteAppUsage>()
                 for (i in 0 until appsArray.length()) {
                     val a = appsArray.getJSONObject(i)
@@ -211,7 +255,7 @@ class KidSafeSyncWorker(
                 val request = SyncReportRequest(
                     childId = childId,
                     day = day,
-                    screenUnlocksApprox = unlocks,
+                    screenUnlocksApprox = finalUnlocks,
                     batteryLevel = batteryLevel,
                     apps = remoteApps,
                     timeline = remoteTimeline

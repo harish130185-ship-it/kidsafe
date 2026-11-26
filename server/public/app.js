@@ -479,15 +479,18 @@ function initSseStream() {
     updateSyncBadge(true, Date.now());
   });
 
-  state.sseEventSource.addEventListener('telemetry_updated', (e) => {
+  const handleTelemetryEvent = (e) => {
     try {
       const payload = JSON.parse(e.data);
       if (payload.childId === state.currentChildId) {
-        showToast(`📲 Realtime Sync: Updated usage from ${state.currentChildName}'s device`, 'info');
+        showToast(`📲 Live Sync: Telemetry received from ${state.currentChildName}`, 'info');
         api(`/api/dashboard?childId=${state.currentChildId}`).then(renderDashboard).catch(() => {});
       }
     } catch {}
-  });
+  };
+
+  state.sseEventSource.addEventListener('telemetry_updated', handleTelemetryEvent);
+  state.sseEventSource.addEventListener('telemetry_synced', handleTelemetryEvent);
 
   state.sseEventSource.addEventListener('device_paired', (e) => {
     try {
@@ -502,7 +505,7 @@ function initSseStream() {
     updateSyncBadge(false, 0);
   };
 
-  // Resilient periodic background refresh (ensures live telemetry on Vercel Serverless)
+  // Resilient fast periodic background refresh (ensures instant live telemetry on Vercel Serverless)
   if (!window._dashboardPollInterval) {
     window._dashboardPollInterval = setInterval(() => {
       if (state.sessionToken && state.currentChildId && $('dashboardSection').style.display !== 'none') {
@@ -510,7 +513,7 @@ function initSseStream() {
           .then(data => { if (data && data.child) renderDashboard(data); })
           .catch(() => {});
       }
-    }, 15000);
+    }, 4000);
   }
 }
 
@@ -604,8 +607,18 @@ function renderDashboard(data) {
   $('childAvatarLarge').textContent = child.name.charAt(0);
   $('childNameHeader').textContent = child.name;
   $('deviceModelText').textContent = child.deviceModel || child.deviceName || 'Android Device';
-  $('deviceBatteryText').textContent = `🔋 ${child.batteryLevel || 80}%`;
+
+  const validBat = (child.batteryLevel && Number(child.batteryLevel) > 0 && Number(child.batteryLevel) <= 100) ? `${child.batteryLevel}%` : null;
+  $('deviceBatteryText').textContent = `🔋 ${validBat || '--%'}`;
   updateSyncBadge(true, child.lastSync);
+
+  if (summary.isPreservedUsage) {
+    const pill = $('deviceOnlinePill');
+    const text = $('deviceStatusText');
+    if (pill) pill.className = 'status-pill delayed';
+    if (text) text.textContent = 'Phone Locked / Idle (Last Saved)';
+    $('deviceLastSyncText').textContent = `Preserved activity from ${summary.lastReportDay || 'today'}`;
+  }
 
   // 1. Metric Summary Cards
   $('metricScreenTime').textContent = fmtDuration(summary.totalScreenTimeMs);
@@ -942,13 +955,27 @@ $('exportJsonBtn').onclick = () => {
   window.open(`/api/reports/export?format=json&childId=${state.currentChildId}`, '_blank');
 };
 
-// Quick Refresh
-$('quickRefreshBtn').onclick = () => {
-  api(`/api/dashboard?childId=${state.currentChildId}`).then(data => {
-    renderDashboard(data);
-    showToast('Dashboard refreshed with latest telemetry', 'info');
-  });
-};
+// Quick Refresh (Instant manual trigger)
+const qRefresh = $('quickRefreshBtn');
+if (qRefresh) {
+  qRefresh.onclick = async () => {
+    const svg = qRefresh.querySelector('svg');
+    if (svg) svg.style.animation = 'spin 0.8s linear infinite';
+    qRefresh.disabled = true;
+    try {
+      const data = await api(`/api/dashboard?childId=${state.currentChildId}`);
+      if (data && data.child) renderDashboard(data);
+      showToast('⚡ Instant Refresh: Dashboard updated with latest telemetry', 'success');
+    } catch (e) {
+      showToast(e.message || 'Refresh failed', 'error');
+    } finally {
+      setTimeout(() => {
+        if (svg) svg.style.animation = '';
+        qRefresh.disabled = false;
+      }, 500);
+    }
+  };
+}
 
 // --- DEVICES TAB & PAIRING ---
 async function loadDevices() {

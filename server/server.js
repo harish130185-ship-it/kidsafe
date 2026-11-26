@@ -973,7 +973,7 @@ async function requestHandler(req, res) {
           avatar: body.childName.toLowerCase().replace(/[^a-z]/g, '') || 'default',
           deviceName: 'Pending Setup',
           deviceModel: 'Android Device',
-          batteryLevel: 100,
+          batteryLevel: null,
           isOnline: false,
           lastSyncAt: 0,
           dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120
@@ -1052,6 +1052,9 @@ async function requestHandler(req, res) {
       const deviceToken = crypto.randomBytes(32).toString('hex');
       const deviceId = `dev-${Date.now()}`;
 
+      const parsedBattery = Number(body.batteryLevel);
+      const initialBattery = (!isNaN(parsedBattery) && parsedBattery > 0 && parsedBattery <= 100) ? parsedBattery : null;
+
       const newDevice = {
         id: deviceId,
         childId: session.childId,
@@ -1063,7 +1066,7 @@ async function requestHandler(req, res) {
         token: deviceToken,
         pairedAt: Date.now(),
         lastSyncAt: Date.now(),
-        batteryLevel: Number(body.batteryLevel) || 100,
+        batteryLevel: initialBattery,
         isRevoked: false
       };
 
@@ -1076,6 +1079,9 @@ async function requestHandler(req, res) {
         child.deviceModel = newDevice.deviceModel;
         child.isOnline = true;
         child.lastSyncAt = Date.now();
+        if (initialBattery !== null) {
+          child.batteryLevel = initialBattery;
+        }
       }
 
       // Mark pairing session consumed
@@ -1239,7 +1245,23 @@ async function requestHandler(req, res) {
       const yesterdayStr = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
 
       const childReports = db.reports[child.id] || {};
-      const todayReport = childReports[todayStr] || {
+
+      // Look for the most recently populated report if today has no data yet (e.g. device locked / idle)
+      const allReportKeys = Object.keys(childReports).sort().reverse();
+      const latestReportKey = allReportKeys.find(k => childReports[k] && (childReports[k].totalScreenTimeMs > 0 || (childReports[k].apps && childReports[k].apps.length > 0)));
+      const latestReport = latestReportKey ? childReports[latestReportKey] : null;
+
+      let isPreservedUsage = false;
+      let activeReport = childReports[todayStr];
+
+      if (!activeReport || (!activeReport.totalScreenTimeMs && (!activeReport.apps || activeReport.apps.length === 0))) {
+        if (latestReport) {
+          activeReport = latestReport;
+          isPreservedUsage = true;
+        }
+      }
+
+      const todayReport = activeReport || {
         totalScreenTimeMs: 0,
         screenUnlocksApprox: 0,
         apps: [],
@@ -1340,7 +1362,9 @@ async function requestHandler(req, res) {
           freshness,
           syncHealth: freshness,
           lastSyncTimestamp: child.lastSyncAt,
-          lastSyncFormatted
+          lastSyncFormatted,
+          isPreservedUsage,
+          lastReportDay: todayReport.day || todayStr
         },
         charts: {
           hourlyActivity,
@@ -1583,34 +1607,50 @@ async function requestHandler(req, res) {
       });
 
       if (!db.reports[childId]) db.reports[childId] = {};
+      const existing = db.reports[childId][day];
+
+      // CRITICAL PRESERVATION: If phone is currently locked/idle and sends an empty snapshot (0 apps or 0 ms),
+      // DO NOT overwrite and wipe the existing accumulated records for today!
+      const shouldKeepExistingApps = formattedApps.length === 0 && existing && existing.apps && existing.apps.length > 0;
+      const finalApps = shouldKeepExistingApps ? existing.apps : formattedApps;
+      const finalDuration = shouldKeepExistingApps ? existing.totalScreenTimeMs : Math.max(totalDurationMs, existing?.totalScreenTimeMs || 0);
+      const finalTimeline = formattedTimeline.length === 0 && existing?.timeline?.length > 0 ? existing.timeline : (formattedTimeline.length > 0 ? formattedTimeline : (existing?.timeline || []));
+      const finalHourly = totalDurationMs === 0 && existing?.hourlyActivity ? existing.hourlyActivity : hourlyActivity;
+      const finalCategory = totalDurationMs === 0 && existing?.categoryBreakdown ? existing.categoryBreakdown : categoryBreakdown;
+      const finalUnlocks = Math.max(Number(body.screenUnlocksApprox) || 0, existing?.screenUnlocksApprox || 0);
+
       db.reports[childId][day] = {
         day,
         childId,
-        totalScreenTimeMs: totalDurationMs,
-        screenUnlocksApprox: Number(body.screenUnlocksApprox) || 0,
-        apps: formattedApps,
-        timeline: formattedTimeline,
-        hourlyActivity,
-        categoryBreakdown,
+        totalScreenTimeMs: finalDuration,
+        screenUnlocksApprox: finalUnlocks,
+        apps: finalApps,
+        timeline: finalTimeline,
+        hourlyActivity: finalHourly,
+        categoryBreakdown: finalCategory,
         receivedAt: Date.now()
       };
 
       const child = db.children.find(c => c.id === childId);
+      const parsedBattery = Number(body.batteryLevel);
+      const validBattery = (!isNaN(parsedBattery) && parsedBattery > 0 && parsedBattery <= 100) ? parsedBattery : null;
+
       if (child) {
         child.lastSyncAt = Date.now();
         child.isOnline = true;
-        if (body.batteryLevel !== undefined) child.batteryLevel = Number(body.batteryLevel);
+        if (validBattery !== null) child.batteryLevel = validBattery;
       }
 
       if (registeredDevice) {
         registeredDevice.lastSyncAt = Date.now();
-        if (body.batteryLevel !== undefined) registeredDevice.batteryLevel = Number(body.batteryLevel);
+        registeredDevice.isOnline = true;
+        if (validBattery !== null) registeredDevice.batteryLevel = validBattery;
       }
 
       // Check limits and issue alerts
       const limits = db.limits[childId] || [];
       for (const limit of limits) {
-        const app = formattedApps.find(a => a.package === limit.package);
+        const app = finalApps.find(a => a.package === limit.package);
         if (app && app.durationMs >= limit.dailyLimitMinutes * 60000) {
           const alertId = `alert-limit-${childId}-${limit.package}-${day}`;
           if (!db.alerts.some(a => a.id === alertId)) {
@@ -1633,15 +1673,17 @@ async function requestHandler(req, res) {
 
       saveDatabase();
 
-      // Broadcast telemetry update via Server-Sent Events!
-      broadcastEvent('telemetry_synced', {
+      // Broadcast telemetry update via Server-Sent Events to both event channels!
+      const eventPayload = {
         childId,
         childName: child?.name,
         syncedAt: Date.now(),
         batteryLevel: child?.batteryLevel,
-        totalScreenTimeMs: totalDurationMs,
-        recordsCount: formattedApps.length
-      });
+        totalScreenTimeMs: finalDuration,
+        recordsCount: finalApps.length
+      };
+      broadcastEvent('telemetry_synced', eventPayload);
+      broadcastEvent('telemetry_updated', eventPayload);
 
       return respond(res, 200, { ok: true, syncedAt: Date.now(), recordsCount: formattedApps.length });
     }

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="accessibility_service_desc">KidSafe uses Accessibility only to enforce parent-defined application limits and bedtime schedules. No personal keystrokes or chat contents are read.</string>
-    <string name="app_name">KidSafe Activity Monitor</string>
-</resources>

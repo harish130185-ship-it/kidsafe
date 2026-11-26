@@ -59,7 +59,8 @@ data class ClaimPairingRequest(
     @SerializedName("deviceName") val deviceName: String,
     @SerializedName("deviceModel") val deviceModel: String,
     @SerializedName("androidVersion") val androidVersion: String,
-    @SerializedName("appGuid") val appGuid: String
+    @SerializedName("appGuid") val appGuid: String,
+    @SerializedName("batteryLevel") val batteryLevel: Int? = null
 )
 
 data class ClaimPairingResponse(

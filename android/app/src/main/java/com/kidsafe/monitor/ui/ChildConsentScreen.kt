@@ -166,13 +166,18 @@ fun ChildConsentScreen() {
                                     prefs.edit().putString("app_guid", appGuid).apply()
                                 }
 
+                                val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                                val bat = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                                val batteryLevel = if (bat in 1..100) bat else null
+
                                 val resp = api.claimPairing(
                                     ClaimPairingRequest(
                                         pairingCode = code,
                                         deviceName = "${Build.MANUFACTURER} ${Build.MODEL}",
                                         deviceModel = Build.MODEL,
                                         androidVersion = Build.VERSION.RELEASE,
-                                        appGuid = appGuid
+                                        appGuid = appGuid,
+                                        batteryLevel = batteryLevel
                                     )
                                 )
 
@@ -193,6 +198,9 @@ fun ChildConsentScreen() {
                                     pairedChildName = cName
                                     pairingSuccess = true
                                     pairingMessage = "Successfully paired with Parent for $cName!"
+
+                                    // Trigger immediate instant sync
+                                    MonitorManager.syncNow(context)
                                 } else {
                                     pairingSuccess = false
                                     pairingMessage = resp.body()?.error ?: "Invalid or expired pairing code"
