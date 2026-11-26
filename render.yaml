@@ -1,0 +1,28 @@
+# ===============================================
+# KidSafe Activity Monitor - Render Deployment Blueprint
+# Automatic Free Cloud Deployment for kidsafe.railplus.in
+# ===============================================
+
+services:
+  - type: web
+    name: kidsafe-monitor
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: "echo 'No build step required (0 npm dependencies)'"
+    startCommand: "node server/server.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: PARENT_TOKEN
+        generateValue: true
+      - key: DEVICE_TOKEN
+        generateValue: true
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: kidsafe-storage
+      mountPath: /var/data
+      sizeGB: 1

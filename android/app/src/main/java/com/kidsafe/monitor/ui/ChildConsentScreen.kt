@@ -36,7 +36,7 @@ fun ChildConsentScreen() {
 
     var isMonitoringActive by remember { mutableStateOf(MonitorManager.isConsentGranted(context)) }
     var hasUsageAccess by remember { mutableStateOf(UsageCollector.granted(context)) }
-    var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "http://192.168.0.219:8080") ?: "http://192.168.0.219:8080") }
+    var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in") }
     var deviceToken by remember { mutableStateOf(prefs.getString("device_token", "kidsafe_device_secret_key_982374982374") ?: "") }
     var pairedChildName by remember { mutableStateOf(prefs.getString("child_name", "Not Paired") ?: "Not Paired") }
     var isGuardianConsentChecked by remember { mutableStateOf(isMonitoringActive) }

@@ -928,8 +928,9 @@ http.createServer(async (req, res) => {
       db.pairingSessions.push(session);
       saveDatabase();
 
-      // Host for QR code connection
-      const hostUrl = `http://${req.headers.host || 'localhost:8080'}`;
+      // Host for QR code and pairing connection (auto-detects https / proxy)
+      const proto = req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http');
+      const hostUrl = `${proto}://${req.headers.host || 'localhost:8080'}`;
       const qrPayload = JSON.stringify({ code, url: hostUrl, childName: child.name });
       const qrDataUrl = generatePairingQrSvg(qrPayload);
 

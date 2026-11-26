@@ -1,0 +1,62 @@
+# ==========================================
+# KidSafe Activity Monitor - Git Ignore Configuration
+# Enforces strict security & privacy boundaries
+# ==========================================
+
+# 1. Private Databases & User Telemetry
+server/private-data/
+server/private-data/*
+*.db
+*.sqlite
+*.sqlite3
+database.json
+database.json.tmp
+
+# 2. Environment Variables & Secret Keys
+.env
+.env.*
+*.env
+*.local
+server/.env
+server/.env.*
+
+# 3. Android Signing Keys & Keystores (HIGH SECURITY)
+*.jks
+*.keystore
+*.p12
+*.key
+kidsafe-release.jks
+android/app/kidsafe-release.jks
+android/local.properties
+android/.kotlin/
+
+# 4. Android Build Outputs & Large Binaries
+*.apk
+*.aab
+*.ap_
+KidSafe-Monitor.apk
+server/public/KidSafe-Monitor.apk
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+
+# 5. OS & IDE Metadata
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 6. Test artifacts & temporary files
+tmp/
+temp/
+*.tmp
+Screenshot_*.jpg
+Screenshot_*.png
+test-*.ps1
