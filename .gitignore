@@ -19,6 +19,8 @@ database.json.tmp
 *.local
 server/.env
 server/.env.*
+!.env.example
+!server/.env.example
 
 # 3. Android Signing Keys & Keystores (HIGH SECURITY)
 *.jks

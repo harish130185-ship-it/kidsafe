@@ -619,6 +619,17 @@ function initSseStream() {
   state.sseEventSource.onerror = () => {
     updateSyncBadge(false, 0);
   };
+
+  // Resilient periodic background refresh (ensures live telemetry on Vercel Serverless)
+  if (!window._dashboardPollInterval) {
+    window._dashboardPollInterval = setInterval(() => {
+      if (state.sessionToken && state.currentChildId && $('dashboardSection').style.display !== 'none') {
+        api(`/api/dashboard?childId=${state.currentChildId}`)
+          .then(data => { if (data && data.child) renderDashboard(data); })
+          .catch(() => {});
+      }
+    }, 15000);
+  }
 }
 
 function updateSyncBadge(isConnected, lastSyncTs) {

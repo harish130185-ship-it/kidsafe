@@ -8,11 +8,18 @@ const crypto = require('node:crypto');
 const PORT = Number(process.env.PORT || 8080);
 const PARENT_SECRET = process.env.PARENT_TOKEN || 'kidsafe_parent_secret_key_8923487293847';
 const DEVICE_FALLBACK_TOKEN = process.env.DEVICE_TOKEN || 'kidsafe_device_secret_key_982374982374';
-const DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'private-data'));
+
+const isVercel = !!process.env.VERCEL;
+const defaultDataDir = isVercel ? '/tmp/kidsafe-data' : path.join(__dirname, 'private-data');
+const DIR = path.resolve(process.env.DATA_DIR || defaultDataDir);
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const DAY_MS = 86400000;
 
-fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
+try {
+  fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
+} catch (e) {
+  // Read-only filesystem warning; in-memory fallback will be used
+}
 const dataFile = path.join(DIR, 'database.json');
 
 // --- APP CATALOG & CATEGORIZER ---
@@ -154,7 +161,52 @@ async function sendTwilioSms(accountSid, authToken, fromNumber, toNumber, otp) {
   });
 }
 
-// Load database from disk
+// --- CLOUD KV & DISK DATABASE LAYER ---
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+async function executeKv(cmdArray) {
+  if (!KV_URL || !KV_TOKEN) return null;
+  try {
+    const res = await fetch(KV_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${KV_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(cmdArray)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.result;
+    }
+  } catch (e) {
+    console.warn('[Cloud KV]', e.message);
+  }
+  return null;
+}
+
+let kvInitialized = false;
+async function ensureDbLoaded() {
+  if (kvInitialized) return;
+  kvInitialized = true;
+  if (KV_URL && KV_TOKEN) {
+    try {
+      const res = await executeKv(['GET', 'kidsafe_database']);
+      if (res) {
+        const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+        if (parsed && typeof parsed === 'object') {
+          db = Object.assign(db, parsed);
+          console.log('[Cloud KV] Successfully restored state from cloud store.');
+        }
+      }
+    } catch (e) {
+      console.warn('[Cloud KV] Sync error:', e.message);
+    }
+  }
+}
+
+// Load database from disk initially
 try {
   if (fs.existsSync(dataFile)) {
     const loaded = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
@@ -179,7 +231,11 @@ function saveDatabase() {
     fs.writeFileSync(temp, JSON.stringify(db, null, 2), { mode: 0o600 });
     fs.renameSync(temp, dataFile);
   } catch (e) {
-    console.error('Error saving db:', e);
+    // Disk write error (e.g. read-only filesystem) is non-fatal
+  }
+
+  if (KV_URL && KV_TOKEN) {
+    executeKv(['SET', 'kidsafe_database', JSON.stringify(db)]).catch(() => {});
   }
 }
 
@@ -430,6 +486,12 @@ function hashPassword(password, salt) {
 // --- HTTP REQUEST HELPERS ---
 function read(req) {
   return new Promise((resolve, reject) => {
+    // Handle Vercel / serverless pre-parsed req.body
+    if (req.body !== undefined && req.body !== null) {
+      if (typeof req.body === 'string') return resolve(req.body);
+      if (Buffer.isBuffer(req.body)) return resolve(req.body.toString('utf8'));
+      return resolve(JSON.stringify(req.body));
+    }
     let length = 0;
     const chunks = [];
     req.on('data', part => {
@@ -457,9 +519,10 @@ function respond(res, status, body, type = 'application/json', extra = {}) {
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 }
 
-// --- HTTP SERVER ---
-http.createServer(async (req, res) => {
+// --- HTTP SERVER REQUEST HANDLER ---
+async function requestHandler(req, res) {
   try {
+    await ensureDbLoaded();
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = url.pathname;
 
@@ -468,7 +531,7 @@ http.createServer(async (req, res) => {
     }
 
     // 1. Static Asset Serving
-    if (req.method === 'GET' && pathname === '/') {
+    if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
     }
     if (req.method === 'GET' && pathname === '/app.js') {
@@ -478,18 +541,23 @@ http.createServer(async (req, res) => {
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'style.css'), 'utf8'), 'text/css; charset=utf-8');
     }
     if (req.method === 'GET' && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk')) {
-      const apkPath = path.join(__dirname, '..', 'KidSafe-Monitor.apk');
-      if (fs.existsSync(apkPath)) {
-        const stat = fs.statSync(apkPath);
+      const rootApkPath = path.join(__dirname, '..', 'KidSafe-Monitor.apk');
+      const publicApkPath = path.join(__dirname, 'public', 'KidSafe-Monitor.apk');
+      const targetApk = fs.existsSync(rootApkPath) ? rootApkPath : (fs.existsSync(publicApkPath) ? publicApkPath : null);
+
+      if (targetApk) {
+        const stat = fs.statSync(targetApk);
         res.writeHead(200, {
           'Content-Type': 'application/vnd.android.package-archive',
           'Content-Length': stat.size,
           'Content-Disposition': 'attachment; filename="KidSafe-Monitor.apk"',
           'Access-Control-Allow-Origin': '*'
         });
-        return fs.createReadStream(apkPath).pipe(res);
+        return fs.createReadStream(targetApk).pipe(res);
       } else {
-        return respond(res, 404, { error: 'APK file not found on server' });
+        const downloadUrl = process.env.APK_DOWNLOAD_URL || 'https://github.com/harish130185-ship-it/kidsafe/releases';
+        res.writeHead(302, { 'Location': downloadUrl });
+        return res.end();
       }
     }
 
@@ -1572,6 +1640,14 @@ http.createServer(async (req, res) => {
     console.error('Server error:', err);
     if (!res.headersSent) respond(res, 500, { error: err.message || 'Internal Server Error' });
   }
-}).listen(PORT, () => {
-  console.log(`KidSafe Enterprise Parent Dashboard running on port ${PORT}`);
-});
+}
+
+const server = http.createServer(requestHandler);
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`KidSafe Enterprise Parent Dashboard running on port ${PORT}`);
+  });
+}
+
+module.exports = requestHandler;
