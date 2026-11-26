@@ -230,138 +230,32 @@ window.closeModal = function(id) {
   if (m) m.style.display = 'none';
 };
 
-// --- AUTHENTICATION FLOW: MOBILE OTP ---
-
-// Step 1: Send OTP
-$('phoneForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const rawPhone = $('phoneInput').value.trim();
-  const submitBtn = $('sendOtpBtn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Sending OTP...';
-
-  try {
-    const res = await api('/api/auth/send-otp', {
-      method: 'POST',
-      body: JSON.stringify({ phone: rawPhone })
-    });
-
-    state.phone = res.phone;
-    if (res.devOtp) {
-      state.lastDevOtp = res.devOtp;
-      $('devHelperText').textContent = `Dev OTP Received: ${res.devOtp} (Click to auto-fill)`;
-    }
-
-    $('sentPhoneText').textContent = res.phone;
-    $('phoneForm').style.display = 'none';
-    $('otpForm').style.display = 'block';
-    $('otpInput').value = '';
-    $('otpInput').focus();
-
-    startCooldownTimer(res.cooldownSeconds || 60);
-    showToast(`Verification code sent to ${res.phone}`, 'success');
-  } catch (err) {
-    showToast(err.message || 'Failed to send OTP', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Send Verification OTP';
-  }
-};
-
-// Step 2: Verify OTP
-$('otpForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const otp = $('otpInput').value.trim();
-  const verifyBtn = $('verifyOtpBtn');
-  verifyBtn.disabled = true;
-  verifyBtn.textContent = 'Verifying...';
-
-  try {
-    const res = await api('/api/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ phone: state.phone, otp })
-    });
-
-    if (res.token) {
-      state.sessionToken = res.token;
-      sessionStorage.setItem('kidsafe_session', res.token);
-    }
-
-    showToast('Verified successfully! Welcome, Parent Guardian.', 'success');
-    await initDashboard();
-  } catch (err) {
-    showToast(err.message || 'Invalid verification code', 'error');
-  } finally {
-    verifyBtn.disabled = false;
-    verifyBtn.textContent = 'Verify & Open Dashboard';
-  }
-};
-
-// Change Phone Button
-$('changePhoneBtn').onclick = () => {
-  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
-  $('otpForm').style.display = 'none';
-  $('phoneForm').style.display = 'block';
-  $('phoneInput').focus();
-};
-
-// Resend OTP Button
-$('resendOtpBtn').onclick = async () => {
-  $('phoneForm').dispatchEvent(new Event('submit'));
-};
-
-function startCooldownTimer(seconds) {
-  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
-  let remaining = seconds;
-  $('cooldownText').style.display = 'inline';
-  $('resendOtpBtn').style.display = 'none';
-  $('cooldownSec').textContent = remaining;
-
-  state.cooldownTimer = setInterval(() => {
-    remaining--;
-    $('cooldownSec').textContent = remaining;
-    if (remaining <= 0) {
-      clearInterval(state.cooldownTimer);
-      $('cooldownText').style.display = 'none';
-      $('resendOtpBtn').style.display = 'inline-block';
-    }
-  }, 1000);
+// Legacy Login Toggle
+const toggleLegacyBtn = $('toggleLegacyLogin');
+if (toggleLegacyBtn) {
+  toggleLegacyBtn.onclick = () => {
+    const f = $('legacyLoginForm');
+    if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  };
 }
 
-// Dev Auto-Fill Helper
-window.autoFillDevOtp = function() {
-  if ($('otpForm').style.display === 'block') {
-    $('otpInput').value = state.lastDevOtp;
-    showToast(`Auto-filled Dev OTP: ${state.lastDevOtp}`, 'info');
-  } else {
-    $('phoneInput').value = '9876543210';
-    $('phoneForm').dispatchEvent(new Event('submit'));
-    setTimeout(() => {
-      $('otpInput').value = state.lastDevOtp;
-    }, 400);
-  }
-};
-
-// Legacy Login Toggle
-$('toggleLegacyLogin').onclick = () => {
-  const f = $('legacyLoginForm');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-};
-
-$('legacyLoginBtn').onclick = async () => {
-  const token = $('parentKeyInput').value.trim();
-  try {
-    await api('/api/login', {
-      method: 'POST',
-      body: JSON.stringify({ token })
-    });
-    state.sessionToken = token;
-    sessionStorage.setItem('kidsafe_session', token);
-    await initDashboard();
-  } catch (err) {
-    showToast(err.message || 'Key login failed', 'error');
-  }
-};
+const legacyLoginBtn = $('legacyLoginBtn');
+if (legacyLoginBtn) {
+  legacyLoginBtn.onclick = async () => {
+    const token = $('parentKeyInput').value.trim();
+    try {
+      await api('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ token })
+      });
+      state.sessionToken = token;
+      sessionStorage.setItem('kidsafe_session', token);
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Key login failed', 'error');
+    }
+  };
+}
 
 // Sign Out
 $('logoutBtn').onclick = async () => {
@@ -369,17 +263,6 @@ $('logoutBtn').onclick = async () => {
   sessionStorage.removeItem('kidsafe_session');
   location.reload();
 };
-
-// --- SEGMENTED AUTH TAB SWITCHER ---
-document.querySelectorAll('.auth-seg-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.auth-seg-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.auth-seg-pane').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    const pane = $(btn.dataset.auth);
-    if (pane) pane.classList.add('active');
-  };
-});
 
 // --- EMAIL & PASSWORD LOGIN & REGISTRATION ---
 let isRegisterMode = false;
@@ -576,7 +459,6 @@ async function initDashboard() {
     renderDashboard(data);
     initSseStream();
     loadDevices();
-    loadSmsGatewaySettings();
     setLanguage(state.lang);
   } catch (err) {
     $('loginSection').style.display = 'flex';
@@ -669,7 +551,10 @@ function renderDashboard(data) {
   const { child, summary, charts, mostUsedApps, timeline, alerts, limits, parent } = data;
 
   if (parent) {
-    $('settingsParentPhone').textContent = parent.displayPhone || parent.phone;
+    const parentEmailElem = $('settingsParentPhone');
+    if (parentEmailElem) {
+      parentEmailElem.textContent = parent.email || parent.displayPhone || parent.phone || 'guardian@email.com';
+    }
   }
 
   // Handle empty state: Parent hasn't added any child yet
@@ -1187,45 +1072,7 @@ function startPairingCountdown(expiresAt) {
   }, 1000);
 }
 
-// --- SMS GATEWAY CONFIGURATION ---
-async function loadSmsGatewaySettings() {
-  try {
-    const res = await api('/api/settings/sms-gateway');
-    const badge = $('smsGatewayStatusBadge');
-    if (!badge) return;
-    if (res.isConfigured) {
-      badge.textContent = res.fast2smsConfigured ? '● Real SMS Active (Fast2SMS)' : '● Real SMS Active (Twilio)';
-      badge.className = 'status-pill ok';
-    } else {
-      badge.textContent = '● Simulation Mode (Dev)';
-      badge.className = 'status-pill warn';
-    }
-    if (res.fast2smsMasked) $('fast2smsKeyInput').placeholder = `Current Key: ${res.fast2smsMasked}`;
-    if (res.twilioSidMasked) $('twilioSidInput').placeholder = `Current SID: ${res.twilioSidMasked}`;
-    if (res.twilioPhoneNumber) $('twilioPhoneInput').value = res.twilioPhoneNumber;
-  } catch {}
-}
 
-const saveSmsBtn = $('saveSmsGatewayBtn');
-if (saveSmsBtn) {
-  saveSmsBtn.onclick = async () => {
-    const fast2smsApiKey = $('fast2smsKeyInput').value.trim();
-    const twilioSid = $('twilioSidInput').value.trim();
-    const twilioToken = $('twilioTokenInput').value.trim();
-    const twilioPhoneNumber = $('twilioPhoneInput').value.trim();
-
-    try {
-      await api('/api/settings/sms-gateway', {
-        method: 'POST',
-        body: JSON.stringify({ fast2smsApiKey, twilioSid, twilioToken, twilioPhoneNumber })
-      });
-      showToast('SMS Gateway settings saved! Real SMS will be sent for OTP.', 'success');
-      loadSmsGatewaySettings();
-    } catch (err) {
-      showToast(err.message || 'Failed to save SMS settings', 'error');
-    }
-  };
-}
 
 // --- SETTINGS ---
 $('saveRetentionBtn').onclick = async () => {

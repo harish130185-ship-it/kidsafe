@@ -26,20 +26,10 @@
         Family Link & Qustodio-inspired Parental Control Console
       </p>
 
-      <!-- AUTH METHOD SWITCHER -->
-      <div class="auth-segmented-tabs">
-        <button type="button" class="auth-seg-btn active" data-auth="pane-email">
-          ✉️ Email & Password
-        </button>
-        <button type="button" class="auth-seg-btn" data-auth="pane-mobile">
-          📱 Mobile OTP
-        </button>
-      </div>
-
       <!-- ========================================== -->
-      <!-- PANE 1: CLEAN EMAIL & PASSWORD AUTH -->
+      <!-- CLEAN EMAIL & PASSWORD AUTHENTICATION -->
       <!-- ========================================== -->
-      <div id="pane-email" class="auth-seg-pane active">
+      <div id="pane-email" style="margin-top: 10px;">
         <!-- 1. SIGN IN FORM -->
         <form id="formEmailLogin">
           <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; text-align: left;">Email Address</label>
@@ -110,78 +100,6 @@
           <button type="button" id="toggleAuthModeBtn" style="background: none; border: none; font-size: 13px; color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: underline;">
             Don't have an account? Create Free Account
           </button>
-        </div>
-      </div>
-
-      <!-- ========================================== -->
-      <!-- PANE 2: MOBILE NUMBER OTP -->
-      <!-- ========================================== -->
-      <div id="pane-mobile" class="auth-seg-pane">
-        <!-- Step 1: Enter Phone Number -->
-        <form id="phoneForm">
-          <div class="phone-input-group">
-            <div class="phone-prefix">
-              <span>🇮🇳</span>
-              <span>+91</span>
-            </div>
-            <input 
-              id="phoneInput" 
-              type="tel" 
-              class="phone-field" 
-              placeholder="98765 43210" 
-              value="8000119735"
-              maxlength="15"
-              required
-              autocomplete="tel"
-            >
-          </div>
-
-          <button type="submit" id="sendOtpBtn" class="btn btn-primary login-btn">
-            Send Verification OTP
-          </button>
-        </form>
-
-        <!-- Step 2: Enter OTP Code (Initially Hidden) -->
-        <form id="otpForm" style="display: none; margin-top: 14px;">
-          <p style="font-size: 13px; color: var(--text-muted);">
-            Enter the 6-digit verification code sent to <strong id="sentPhoneText" style="color: var(--text-main);">+91 80001 19735</strong>
-          </p>
-
-          <input 
-            id="otpInput" 
-            type="text" 
-            class="otp-field" 
-            placeholder="••••••" 
-            maxlength="6" 
-            inputmode="numeric"
-            pattern="[0-9]*"
-            autocomplete="one-time-code"
-            required
-          >
-
-          <button type="submit" id="verifyOtpBtn" class="btn btn-primary login-btn">
-            Verify & Open Dashboard
-          </button>
-
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
-            <button type="button" id="changePhoneBtn" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">
-              Change Number
-            </button>
-            <span id="cooldownText" style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
-              Resend in <span id="cooldownSec">60</span>s
-            </span>
-            <button type="button" id="resendOtpBtn" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; display: none;">
-              Resend OTP
-            </button>
-          </div>
-        </form>
-
-        <!-- Quick Dev Helper Banner -->
-        <div id="devHelperBox" class="dev-helper-pill" onclick="autoFillDevOtp()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span id="devHelperText">Dev Test Mode: Click to Auto-fill OTP</span>
         </div>
       </div>
 
@@ -714,12 +632,12 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 10px;">
           <div>
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Registered Mobile Number</label>
-            <div id="settingsParentPhone" style="font-size: 15px; font-weight: 700;">+91 98765 43210</div>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Parent Email Account</label>
+            <div id="settingsParentPhone" style="font-size: 15px; font-weight: 700;">parent@email.com</div>
           </div>
           <div>
             <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Account Status</label>
-            <span class="status-pill ok">● OTP Verified Guardian</span>
+            <span class="status-pill ok">● Verified Guardian Account</span>
           </div>
           <div>
             <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Language</label>
@@ -758,54 +676,6 @@
           <div>
             <button id="saveRetentionBtn" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px;">
               Save Retention Policy
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Real SMS Gateway Configuration -->
-      <div class="panel" style="margin-bottom: 24px;">
-        <div class="panel-header">
-          <div>
-            <h3 class="panel-title">Real SMS OTP Gateway Configuration</h3>
-            <span class="panel-subtitle">Deliver real 6-digit verification codes via SMS to parent mobile numbers</span>
-          </div>
-          <span id="smsGatewayStatusBadge" class="status-pill ok">● Real SMS Gateway</span>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
-            By default, KidSafe displays test codes for instant local testing. To send <strong>actual SMS messages</strong> to real mobile numbers (+91), enter your free <a href="https://www.fast2sms.com" target="_blank" style="color: var(--primary); font-weight: 600;">Fast2SMS API Key</a> (for India) or <a href="https://www.twilio.com" target="_blank" style="color: var(--primary); font-weight: 600;">Twilio</a> credentials below:
-          </p>
-
-          <div style="background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
-            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">Option A: Fast2SMS (Instant for Indian Numbers +91)</h4>
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Fast2SMS API Key</label>
-            <input id="fast2smsKeyInput" type="password" class="login-input" placeholder="Paste your Fast2SMS Authorization Key here" style="margin: 0 0 10px 0;">
-            <div style="font-size: 11px; color: var(--text-muted);">Get free trial credits at fast2sms.com > Dev API > Authorization Key.</div>
-          </div>
-
-          <div style="background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px;">
-            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">Option B: Twilio (Global SMS)</h4>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-              <div>
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Account SID</label>
-                <input id="twilioSidInput" type="text" class="login-input" placeholder="ACxxxxxxxx" style="margin: 0;">
-              </div>
-              <div>
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Auth Token</label>
-                <input id="twilioTokenInput" type="password" class="login-input" placeholder="••••••••" style="margin: 0;">
-              </div>
-              <div>
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Twilio Phone Number</label>
-                <input id="twilioPhoneInput" type="text" class="login-input" placeholder="+1234567890" style="margin: 0;">
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <button id="saveSmsGatewayBtn" class="btn btn-primary" style="font-size: 13px; padding: 8px 18px;">
-              Save SMS Gateway Settings
             </button>
           </div>
         </div>
