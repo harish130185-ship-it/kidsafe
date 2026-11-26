@@ -90,7 +90,7 @@ let state = {
   timelineFilter: 'today',
   theme: localStorage.getItem('kidsafe_theme') || 'light',
   lang: localStorage.getItem('kidsafe_lang') || 'en',
-  sessionToken: sessionStorage.getItem('kidsafe_session') || '',
+  sessionToken: '',
   phone: '',
   lastDevOtp: '123456',
   cooldownTimer: null,
@@ -260,8 +260,12 @@ if (legacyLoginBtn) {
 // Sign Out
 $('logoutBtn').onclick = async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
-  sessionStorage.removeItem('kidsafe_session');
-  location.reload();
+  state.sessionToken = '';
+  sessionStorage.clear();
+  localStorage.removeItem('kidsafe_session');
+  $('dashboardSection').style.display = 'none';
+  $('loginSection').style.display = 'flex';
+  showToast('Signed out successfully', 'info');
 };
 
 // --- EMAIL & PASSWORD LOGIN & REGISTRATION ---
@@ -1218,5 +1222,9 @@ $('deleteAccountBtn').onclick = async () => {
 };
 
 // --- STARTUP ENTRY POINT ---
-initDashboard();
-initGoogleAuth();
+// Always start with the Login Form when opening the website
+state.sessionToken = '';
+sessionStorage.removeItem('kidsafe_session');
+$('loginSection').style.display = 'flex';
+$('dashboardSection').style.display = 'none';
+setLanguage(state.lang);

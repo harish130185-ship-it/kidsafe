@@ -269,7 +269,7 @@ function verifyToken(token) {
 }
 
 function getSessionParent(req) {
-  // Check Authorization Bearer header
+  // Check Authorization Bearer header (strictly requires explicit authentication)
   const authHeader = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (authHeader) {
     if (authHeader === '123456789' || equal(authHeader, PARENT_SECRET)) {
@@ -277,20 +277,6 @@ function getSessionParent(req) {
     }
     const fromToken = verifyToken(authHeader);
     if (fromToken) return fromToken;
-  }
-
-  // Check Cookie header
-  const rawCookie = (req.headers.cookie || '').split(';').find(s => s.trim().startsWith('session='));
-  if (rawCookie) {
-    const sessionVal = decodeURIComponent(rawCookie.trim().substring(8));
-    const fromCookie = verifyToken(sessionVal);
-    if (fromCookie) return fromCookie;
-
-    // Legacy format backward compatibility (timestamp.sig)
-    const parts = sessionVal.split('.');
-    if (parts.length === 2 && equal(parts[1], sign(parts[0]))) {
-      return db.parents[0];
-    }
   }
 
   return null;
@@ -804,8 +790,6 @@ async function requestHandler(req, res) {
         ok: true,
         parent,
         token
-      }, 'application/json', {
-        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
       });
     }
 
@@ -872,8 +856,6 @@ async function requestHandler(req, res) {
         parent,
         token,
         message: 'Account created successfully! Welcome to KidSafe.'
-      }, 'application/json', {
-        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
       });
     }
 
@@ -919,8 +901,6 @@ async function requestHandler(req, res) {
         parent,
         token,
         message: 'Signed in successfully!'
-      }, 'application/json', {
-        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
       });
     }
 
@@ -936,7 +916,7 @@ async function requestHandler(req, res) {
     // 6. AUTHENTICATION: Logout
     if (req.method === 'POST' && (pathname === '/api/auth/logout' || pathname === '/api/logout')) {
       return respond(res, 200, { ok: true, message: 'Logged out successfully' }, 'application/json', {
-        'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+        'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'
       });
     }
 
@@ -949,9 +929,7 @@ async function requestHandler(req, res) {
       }
       const parent = db.parents[0] || { id: 'parent-admin', name: 'Guardian Parent', phone: '+91 98765 43210' };
       const token = createToken(parent.id);
-      return respond(res, 200, { ok: true, parent, token }, 'application/json', {
-        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
-      });
+      return respond(res, 200, { ok: true, parent, token });
     }
 
     // 8. PAIRING: Generate 6-digit Device Pairing Code & QR
