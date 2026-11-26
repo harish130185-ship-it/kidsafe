@@ -674,17 +674,42 @@ function renderDashboard(data) {
 // Render Child Switcher
 function renderChildSwitcher(children, activeId) {
   const container = $('childSelector');
-  container.innerHTML = '';
-  children.forEach(c => {
-    const btn = document.createElement('button');
-    btn.className = `child-pill ${c.id === activeId ? 'active' : ''}`;
-    btn.innerHTML = `<span class="child-avatar">${c.name.charAt(0)}</span><span>${c.name}</span>`;
-    btn.onclick = () => {
-      state.currentChildId = c.id;
-      api(`/api/dashboard?childId=${c.id}`).then(renderDashboard);
-    };
-    container.appendChild(btn);
-  });
+  if (container) {
+    container.innerHTML = '';
+    if (children && children.length > 1) {
+      children.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = `child-pill ${c.id === activeId ? 'active' : ''}`;
+        btn.innerHTML = `<span class="child-avatar">${c.name.charAt(0)}</span><span>${c.name}</span>`;
+        btn.onclick = () => {
+          state.currentChildId = c.id;
+          api(`/api/dashboard?childId=${c.id}`).then(renderDashboard);
+        };
+        container.appendChild(btn);
+      });
+    }
+  }
+
+  // Subheader Dropdown Switcher (only shows if multiple children exist)
+  const dropdown = $('childDropdownSwitcher');
+  if (dropdown) {
+    if (children && children.length > 1) {
+      dropdown.style.display = 'inline-block';
+      dropdown.innerHTML = children.map(c => `<option value="${c.id}" ${c.id === activeId ? 'selected' : ''}>Switch: ${c.name}</option>`).join('');
+      dropdown.onchange = (e) => {
+        state.currentChildId = e.target.value;
+        api(`/api/dashboard?childId=${state.currentChildId}`).then(renderDashboard);
+      };
+    } else {
+      dropdown.style.display = 'none';
+    }
+  }
+
+  // Toggle remove child button visibility based on whether a child exists
+  const removeBtn = $('removeChildBtn');
+  if (removeBtn) {
+    removeBtn.style.display = activeId ? 'inline-flex' : 'none';
+  }
 }
 
 // 7-Day Chart
@@ -1017,11 +1042,16 @@ function renderDevicesGrid(devices) {
           <span class="perm-chip ok">✓ Parental Consent</span>
         </div>
       </div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--card-border); padding-top: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--card-border); padding-top: 12px; gap: 8px;">
         <span style="font-size: 11px; color: var(--text-muted);">Token: ••••${dev.deviceToken ? dev.deviceToken.slice(-6) : 'sec789'}</span>
-        <button class="btn btn-secondary" style="color: var(--danger); font-size: 12px; padding: 5px 12px;" onclick="revokeDevice('${dev.id}', '${dev.childName}')">
-          Revoke Access
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="revokeDevice('${dev.id}', '${dev.childName}')">
+            Revoke Sync
+          </button>
+          <button class="btn btn-secondary" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3); font-size: 11px; padding: 5px 10px;" onclick="deleteChildProfile('${dev.childId}', '${dev.childName}')">
+            Delete Profile
+          </button>
+        </div>
       </div>
     `;
     container.appendChild(card);
@@ -1038,6 +1068,63 @@ window.revokeDevice = async function(deviceId, name) {
     showToast(err.message || 'Revocation failed', 'error');
   }
 };
+
+window.deleteChildProfile = async function(childId, name) {
+  if (!confirm(`Are you sure you want to completely remove ${name}'s profile? All paired devices, alerts, and usage data will be deleted.`)) return;
+  try {
+    await api('/api/children/delete', {
+      method: 'POST',
+      body: JSON.stringify({ childId })
+    });
+    showToast(`Child profile ${name} removed`, 'success');
+    if (state.currentChildId === childId) {
+      state.currentChildId = null;
+      state.currentChildName = '';
+    }
+    initDashboard();
+  } catch (err) {
+    showToast(err.message || 'Failed to remove child profile', 'error');
+  }
+};
+
+// --- REMOVE CHILD PROFILE MODAL CONTROLS ---
+const removeChildBtn = $('removeChildBtn');
+if (removeChildBtn) {
+  removeChildBtn.onclick = () => {
+    if (!state.currentChildId) {
+      showToast('No child profile selected', 'error');
+      return;
+    }
+    const nameSpan = $('deleteChildNameSpan');
+    if (nameSpan) nameSpan.textContent = state.currentChildName || 'this child';
+    openModal('removeChildModal');
+  };
+}
+
+const confirmRemoveBtn = $('confirmRemoveChildBtn');
+if (confirmRemoveBtn) {
+  confirmRemoveBtn.onclick = async () => {
+    if (!state.currentChildId) return;
+    confirmRemoveBtn.disabled = true;
+    confirmRemoveBtn.textContent = 'Removing...';
+    try {
+      await api('/api/children/delete', {
+        method: 'POST',
+        body: JSON.stringify({ childId: state.currentChildId })
+      });
+      showToast(`Child profile ${state.currentChildName || ''} removed successfully`, 'success');
+      closeModal('removeChildModal');
+      state.currentChildId = null;
+      state.currentChildName = '';
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Failed to remove child profile', 'error');
+    } finally {
+      confirmRemoveBtn.disabled = false;
+      confirmRemoveBtn.textContent = 'Yes, Remove Profile';
+    }
+  };
+}
 
 // --- PAIRING MODAL WIZARD ---
 window.openPairingModal = $('addDeviceBtn').onclick = $('quickPairBtn').onclick = () => {

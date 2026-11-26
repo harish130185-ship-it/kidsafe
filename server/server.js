@@ -1142,12 +1142,19 @@ async function requestHandler(req, res) {
     }
 
     // 11. DEVICES: Revoke Device Access
-    if (req.method === 'POST' && pathname === '/api/devices/revoke') {
+    if ((req.method === 'POST' && pathname === '/api/devices/revoke') || (req.method === 'DELETE' && pathname.startsWith('/api/devices/'))) {
       const parent = getSessionParent(req);
       if (!parent) return respond(res, 401, { error: 'Unauthorized' });
 
-      const body = JSON.parse(await read(req));
-      const device = db.devices.find(d => d.id === body.deviceId);
+      let deviceId = '';
+      if (pathname.startsWith('/api/devices/')) {
+        deviceId = pathname.slice('/api/devices/'.length);
+      } else {
+        const body = JSON.parse(await read(req));
+        deviceId = body.deviceId;
+      }
+
+      const device = db.devices.find(d => d.id === deviceId);
       if (!device) return respond(res, 404, { error: 'Device not found' });
 
       device.isRevoked = true;
@@ -1192,6 +1199,39 @@ async function requestHandler(req, res) {
       saveDatabase();
       broadcastEvent('child_added', { child: newChild });
       return respond(res, 201, { ok: true, child: newChild });
+    }
+
+    // 14b. POST /api/children/delete or DELETE /api/children: Remove child profile
+    if ((req.method === 'POST' && pathname === '/api/children/delete') || (req.method === 'DELETE' && (pathname === '/api/children' || pathname.startsWith('/api/children/')))) {
+      let childId = url.searchParams.get('childId');
+      if (!childId && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await read(req));
+          childId = body.childId;
+        } catch {}
+      }
+      if (!childId && pathname.startsWith('/api/children/')) {
+        childId = pathname.slice('/api/children/'.length);
+      }
+
+      if (!childId) return respond(res, 400, { error: 'Child profile ID is required' });
+
+      const idx = db.children.findIndex(c => c.id === childId && c.parentId === parentUser.id);
+      if (idx === -1) return respond(res, 404, { error: 'Child profile not found' });
+
+      const removed = db.children.splice(idx, 1)[0];
+
+      // Clean up all associated child data
+      delete db.reports[childId];
+      delete db.limits[childId];
+      db.alerts = (db.alerts || []).filter(a => a.childId !== childId);
+      db.pairingSessions = (db.pairingSessions || []).filter(s => s.childId !== childId);
+      db.devices = (db.devices || []).filter(d => d.childId !== childId);
+
+      saveDatabase();
+      broadcastEvent('child_deleted', { childId, childName: removed.name });
+
+      return respond(res, 200, { ok: true, message: `Child profile ${removed.name} removed successfully`, childId });
     }
 
     // 15. GET /api/dashboard: Complete Dashboard with Freshness Indicators
