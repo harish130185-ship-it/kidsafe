@@ -523,8 +523,19 @@ function respond(res, status, body, type = 'application/json', extra = {}) {
 async function requestHandler(req, res) {
   try {
     await ensureDbLoaded();
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const pathname = url.pathname;
+
+    // Support both direct URL (local) and Vercel serverless rewritten URL (__url or headers)
+    const rawUrl = req.url || '/';
+    const url = new URL(rawUrl, `http://${req.headers.host || 'localhost'}`);
+    const queryUrl = url.searchParams.get('__url');
+    const vercelMatched = req.headers['x-matched-path'] || req.headers['x-invoke-path'] || req.headers['x-forwarded-uri'];
+
+    let pathname = url.pathname;
+    if (queryUrl) {
+      pathname = queryUrl.split('?')[0];
+    } else if (vercelMatched && !vercelMatched.endsWith('.js')) {
+      pathname = vercelMatched.split('?')[0];
+    }
 
     if (req.method === 'OPTIONS') {
       return respond(res, 204, '');
