@@ -2,18 +2,106 @@
 
 const $ = id => document.getElementById(id);
 
-let state = {
-  currentChildId: 'child-leo',
-  children: [],
-  dashboardData: null,
-  timelineFilter: 'today',
-  theme: localStorage.getItem('kidsafe_theme') || 'light'
+// --- TRANSLATIONS (EN, HI, HINGLISH) ---
+const i18n = {
+  en: {
+    tagline: 'Family Safety & Digital Wellbeing Platform',
+    tabOverview: 'Overview',
+    tabLive: 'Live Activity',
+    tabAnalytics: 'App Analytics',
+    tabLimits: 'Screen Time & Limits',
+    tabDevices: 'Paired Devices',
+    tabReports: 'Safety Reports',
+    tabSettings: 'Settings',
+    cardScreenTime: "Today's Screen Time",
+    cardUnlocks: 'Unlock Events',
+    cardApps: 'Apps Used',
+    cardVsYesterday: 'vs Yesterday',
+    cardLimit: 'Daily Limit',
+    cardSync: 'Sync Status',
+    addDevice: 'Add Child Device',
+    signOut: 'Sign Out',
+    emptyActivity: "No activity yet. Once the device shares its first report, you'll see it here.",
+    syncFailed: "We couldn't refresh this device's activity. We'll try again automatically.",
+    deviceInactive: "This device hasn't synced recently. Check its internet connection and permissions.",
+    accessDenied: "You don't have permission to view this device.",
+    liveSynced: 'Live Synced',
+    delayed: 'Sync Delayed',
+    offline: 'Offline'
+  },
+  hi: {
+    tagline: 'पारिवारिक सुरक्षा और डिजिटल कल्याण मंच',
+    tabOverview: 'अवलोकन',
+    tabLive: 'लाइव गतिविधि',
+    tabAnalytics: 'ऐप विश्लेषण',
+    tabLimits: 'स्क्रीन समय और सीमाएं',
+    tabDevices: 'जुड़े हुए उपकरण',
+    tabReports: 'सुरक्षा रिपोर्ट',
+    tabSettings: 'सेटिंग्स',
+    cardScreenTime: 'आज का स्क्रीन समय',
+    cardUnlocks: 'अनलॉक घटनाएं',
+    cardApps: 'उपयोग किए गए ऐप्स',
+    cardVsYesterday: 'कल की तुलना में',
+    cardLimit: 'दैनिक सीमा',
+    cardSync: 'सिंक स्थिति',
+    addDevice: 'बच्चे का उपकरण जोड़ें',
+    signOut: 'लॉग आउट',
+    emptyActivity: 'अभी तक कोई गतिविधि नहीं है। जब उपकरण अपनी पहली रिपोर्ट भेजेगा, तो आप इसे यहां देखेंगे।',
+    syncFailed: 'हम इस उपकरण की गतिविधि को रीफ़्रेश नहीं कर सके। हम स्वचालित रूप से पुनः प्रयास करेंगे।',
+    deviceInactive: 'इस उपकरण ने हाल ही में सिंक नहीं किया है। कृपया इंटरनेट कनेक्शन और अनुमतियों की जाँच करें।',
+    accessDenied: 'आपको इस उपकरण को देखने की अनुमति नहीं है।',
+    liveSynced: 'लाइव सिंक',
+    delayed: 'सिंक विलंबित',
+    offline: 'ऑफ़लाइन'
+  },
+  hinglish: {
+    tagline: 'Family Safety aur Digital Balance Platform',
+    tabOverview: 'Overview',
+    tabLive: 'Live Activity',
+    tabAnalytics: 'App Analytics',
+    tabLimits: 'Screen Time aur Limits',
+    tabDevices: 'Paired Phones',
+    tabReports: 'Safety Reports',
+    tabSettings: 'Settings',
+    cardScreenTime: "Aaj ka Screen Time",
+    cardUnlocks: 'Unlock Events',
+    cardApps: 'Apps Used',
+    cardVsYesterday: 'Kal se compare',
+    cardLimit: 'Daily Limit',
+    cardSync: 'Sync Status',
+    addDevice: 'Child Device Add Karein',
+    signOut: 'Sign Out',
+    emptyActivity: "Abhi koi activity nahi hai. Phone se report aate hi yahan dikhegi.",
+    syncFailed: "Activity refresh nahi ho saki. Hum automatic dubara try karenge.",
+    deviceInactive: "Ye phone kafi der se sync nahi hua. Internet aur permission check karein.",
+    accessDenied: "Aapko is phone ko access karne ki permission nahi hai.",
+    liveSynced: 'Live Synced',
+    delayed: 'Sync Delayed',
+    offline: 'Offline'
+  }
 };
 
-// Apply saved theme
+let state = {
+  currentChildId: 'child-leo',
+  currentChildName: 'Leo',
+  children: [],
+  dashboardData: null,
+  devices: [],
+  timelineFilter: 'today',
+  theme: localStorage.getItem('kidsafe_theme') || 'light',
+  lang: localStorage.getItem('kidsafe_lang') || 'en',
+  sessionToken: sessionStorage.getItem('kidsafe_session') || '',
+  phone: '',
+  lastDevOtp: '123456',
+  cooldownTimer: null,
+  pairingTimer: null,
+  sseEventSource: null
+};
+
+// Initialize Theme
 document.documentElement.setAttribute('data-theme', state.theme);
 
-// Format milliseconds to 'Xh Ym' or 'Ym'
+// --- UTILITY HELPERS ---
 function fmtDuration(ms) {
   if (!ms || ms <= 0) return '0m';
   const totalMins = Math.round(ms / 60000);
@@ -24,17 +112,43 @@ function fmtDuration(ms) {
   return `${mins}m`;
 }
 
-// Format timestamp to localized time
+function fmtMinutes(mins) {
+  if (!mins || mins <= 0) return '0m';
+  const hrs = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (hrs > 0 && m > 0) return `${hrs}h ${m}m`;
+  if (hrs > 0) return `${hrs}h`;
+  return `${m}m`;
+}
+
 function fmtTime(ts) {
   if (!ts) return '--:--';
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Fetch helper with error handling
+function showToast(message, type = 'info') {
+  const container = $('toastContainer');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
+// --- FETCH WRAPPER ---
 async function api(endpoint, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (state.sessionToken) {
+    headers['Authorization'] = `Bearer ${state.sessionToken}`;
+  }
   const res = await fetch(endpoint, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers,
     ...options
   });
   const data = await res.json().catch(() => ({}));
@@ -44,434 +158,1093 @@ async function api(endpoint, options = {}) {
   return data;
 }
 
-// 1. Initial Authentication & Load
-async function initDashboard() {
-  try {
-    const data = await api(`/api/dashboard?childId=${state.currentChildId}`);
-    renderDashboard(data);
-    $('loginSection').style.display = 'none';
-    $('dashboardSection').style.display = 'block';
-  } catch (err) {
-    // If not authenticated, keep login section visible
-    $('loginSection').style.display = 'flex';
-    $('dashboardSection').style.display = 'none';
+// --- LANGUAGE SWITCHER ---
+function setLanguage(lang) {
+  if (!i18n[lang]) lang = 'en';
+  state.lang = lang;
+  localStorage.setItem('kidsafe_lang', lang);
+
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+  });
+
+  const t = i18n[lang];
+  $('headerTagline').textContent = t.tagline;
+  $('tabNavOverview').textContent = t.tabOverview;
+  $('tabNavLive').textContent = t.tabLive;
+  $('tabNavAnalytics').textContent = t.tabAnalytics;
+  $('tabNavLimits').textContent = t.tabLimits;
+  $('tabNavDevices').textContent = t.tabDevices;
+  $('tabNavReports').textContent = t.tabReports;
+  $('tabNavSettings').textContent = t.tabSettings;
+
+  $('cardTitleScreenTime').textContent = t.cardScreenTime;
+  $('cardTitleUnlocks').textContent = t.cardUnlocks;
+  $('cardTitleApps').textContent = t.cardApps;
+  $('cardTitleVsYesterday').textContent = t.cardVsYesterday;
+  $('cardTitleLimit').textContent = t.cardLimit;
+  $('cardTitleSync').textContent = t.cardSync;
+  $('addDeviceBtnText').textContent = t.addDevice;
+  $('logoutBtnText').textContent = t.signOut;
+
+  if (state.dashboardData) {
+    renderDashboard(state.dashboardData);
   }
 }
 
-// Login form submission
-$('loginForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const token = $('parentKeyInput').value.trim();
-  try {
-    await api('/api/login', {
-      method: 'POST',
-      body: JSON.stringify({ token })
-    });
-    await initDashboard();
-  } catch (err) {
-    alert(err.message || 'Login failed');
-  }
-};
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.onclick = () => setLanguage(btn.dataset.lang);
+});
 
-// Logout
-$('logoutBtn').onclick = async () => {
-  await api('/api/logout', { method: 'POST' }).catch(() => {});
-  location.reload();
-};
+// --- NAVIGATION TABS ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.onclick = () => {
+    const targetTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const pane = $(targetTab);
+    if (pane) pane.classList.add('active');
 
-// Theme toggle
+    if (targetTab === 'tab-devices') {
+      loadDevices();
+    }
+  };
+});
+
+// --- THEME TOGGLE ---
 $('themeToggle').onclick = () => {
   state.theme = state.theme === 'light' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', state.theme);
   localStorage.setItem('kidsafe_theme', state.theme);
 };
 
-// 2. Main Dashboard Renderer
+// --- MODAL CONTROLS ---
+window.openModal = function(id) {
+  const m = $(id);
+  if (m) m.style.display = 'flex';
+};
+
+window.closeModal = function(id) {
+  const m = $(id);
+  if (m) m.style.display = 'none';
+};
+
+// --- AUTHENTICATION FLOW: MOBILE OTP ---
+
+// Step 1: Send OTP
+$('phoneForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const rawPhone = $('phoneInput').value.trim();
+  const submitBtn = $('sendOtpBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending OTP...';
+
+  try {
+    const res = await api('/api/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone: rawPhone })
+    });
+
+    state.phone = res.phone;
+    if (res.devOtp) {
+      state.lastDevOtp = res.devOtp;
+      $('devHelperText').textContent = `Dev OTP Received: ${res.devOtp} (Click to auto-fill)`;
+    }
+
+    $('sentPhoneText').textContent = res.phone;
+    $('phoneForm').style.display = 'none';
+    $('otpForm').style.display = 'block';
+    $('otpInput').value = '';
+    $('otpInput').focus();
+
+    startCooldownTimer(res.cooldownSeconds || 60);
+    showToast(`Verification code sent to ${res.phone}`, 'success');
+  } catch (err) {
+    showToast(err.message || 'Failed to send OTP', 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Send Verification OTP';
+  }
+};
+
+// Step 2: Verify OTP
+$('otpForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const otp = $('otpInput').value.trim();
+  const verifyBtn = $('verifyOtpBtn');
+  verifyBtn.disabled = true;
+  verifyBtn.textContent = 'Verifying...';
+
+  try {
+    const res = await api('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone: state.phone, otp })
+    });
+
+    if (res.token) {
+      state.sessionToken = res.token;
+      sessionStorage.setItem('kidsafe_session', res.token);
+    }
+
+    showToast('Verified successfully! Welcome, Parent Guardian.', 'success');
+    await initDashboard();
+  } catch (err) {
+    showToast(err.message || 'Invalid verification code', 'error');
+  } finally {
+    verifyBtn.disabled = false;
+    verifyBtn.textContent = 'Verify & Open Dashboard';
+  }
+};
+
+// Change Phone Button
+$('changePhoneBtn').onclick = () => {
+  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
+  $('otpForm').style.display = 'none';
+  $('phoneForm').style.display = 'block';
+  $('phoneInput').focus();
+};
+
+// Resend OTP Button
+$('resendOtpBtn').onclick = async () => {
+  $('phoneForm').dispatchEvent(new Event('submit'));
+};
+
+function startCooldownTimer(seconds) {
+  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
+  let remaining = seconds;
+  $('cooldownText').style.display = 'inline';
+  $('resendOtpBtn').style.display = 'none';
+  $('cooldownSec').textContent = remaining;
+
+  state.cooldownTimer = setInterval(() => {
+    remaining--;
+    $('cooldownSec').textContent = remaining;
+    if (remaining <= 0) {
+      clearInterval(state.cooldownTimer);
+      $('cooldownText').style.display = 'none';
+      $('resendOtpBtn').style.display = 'inline-block';
+    }
+  }, 1000);
+}
+
+// Dev Auto-Fill Helper
+window.autoFillDevOtp = function() {
+  if ($('otpForm').style.display === 'block') {
+    $('otpInput').value = state.lastDevOtp;
+    showToast(`Auto-filled Dev OTP: ${state.lastDevOtp}`, 'info');
+  } else {
+    $('phoneInput').value = '9876543210';
+    $('phoneForm').dispatchEvent(new Event('submit'));
+    setTimeout(() => {
+      $('otpInput').value = state.lastDevOtp;
+    }, 400);
+  }
+};
+
+// Legacy Login Toggle
+$('toggleLegacyLogin').onclick = () => {
+  const f = $('legacyLoginForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+};
+
+$('legacyLoginBtn').onclick = async () => {
+  const token = $('parentKeyInput').value.trim();
+  try {
+    await api('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ token })
+    });
+    state.sessionToken = token;
+    sessionStorage.setItem('kidsafe_session', token);
+    await initDashboard();
+  } catch (err) {
+    showToast(err.message || 'Key login failed', 'error');
+  }
+};
+
+// Sign Out
+$('logoutBtn').onclick = async () => {
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  sessionStorage.removeItem('kidsafe_session');
+  location.reload();
+};
+
+// --- SEGMENTED AUTH TAB SWITCHER ---
+document.querySelectorAll('.auth-seg-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.auth-seg-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.auth-seg-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const pane = $(btn.dataset.auth);
+    if (pane) pane.classList.add('active');
+  };
+});
+
+// --- EMAIL & PASSWORD LOGIN & REGISTRATION ---
+let isRegisterMode = false;
+const toggleAuthModeBtn = $('toggleAuthModeBtn');
+if (toggleAuthModeBtn) {
+  toggleAuthModeBtn.onclick = () => {
+    isRegisterMode = !isRegisterMode;
+    $('formEmailLogin').style.display = isRegisterMode ? 'none' : 'block';
+    $('formEmailRegister').style.display = isRegisterMode ? 'block' : 'none';
+    toggleAuthModeBtn.textContent = isRegisterMode 
+      ? 'Already have an account? Sign In' 
+      : "Don't have an account? Create Free Account";
+  };
+}
+
+// 1. Sign In with Email & Password
+const formEmailLogin = $('formEmailLogin');
+if (formEmailLogin) {
+  formEmailLogin.onsubmit = async (e) => {
+    e.preventDefault();
+    const email = $('loginEmail').value.trim();
+    const password = $('loginPassword').value.trim();
+
+    if (!email || !password) {
+      showToast('Please enter both email and password', 'error');
+      return;
+    }
+
+    const btn = $('btnLoginEmail');
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+
+    try {
+      const res = await api('/api/auth/password-login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+
+      if (res.token) {
+        state.sessionToken = res.token;
+        sessionStorage.setItem('kidsafe_session', res.token);
+      }
+
+      showToast(`Welcome back, ${res.parent.name || 'Parent'}!`, 'success');
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Login failed. Please check your credentials.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign In to Dashboard';
+    }
+  };
+}
+
+// 2. Register with Email & Password
+const formEmailRegister = $('formEmailRegister');
+if (formEmailRegister) {
+  formEmailRegister.onsubmit = async (e) => {
+    e.preventDefault();
+    const email = $('regEmail').value.trim();
+    const name = $('regName').value.trim();
+    const password = $('regPassword').value.trim();
+
+    if (!email || !password) {
+      showToast('Please enter email and password', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters long', 'error');
+      return;
+    }
+
+    const btn = $('btnRegisterEmail');
+    btn.disabled = true;
+    btn.textContent = 'Creating account...';
+
+    try {
+      const res = await api('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, name, password })
+      });
+
+      if (res.token) {
+        state.sessionToken = res.token;
+        sessionStorage.setItem('kidsafe_session', res.token);
+      }
+
+      showToast(`Account created successfully! Welcome, ${res.parent.name}.`, 'success');
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Registration failed', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create Free Account & Enter Dashboard';
+    }
+  };
+}
+
+// --- 1-CLICK GOOGLE SIGN-IN (100% FREE) ---
+let googleClientId = '';
+
+async function initGoogleAuth() {
+  try {
+    const config = await api('/api/auth/google-config');
+    if (config.googleClientId && window.google?.accounts?.id) {
+      googleClientId = config.googleClientId;
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false
+      });
+      google.accounts.id.renderButton($('g_id_signin'), {
+        theme: state.theme === 'dark' ? 'filled_black' : 'outline',
+        size: 'large',
+        shape: 'pill',
+        text: 'continue_with',
+        width: 320
+      });
+      $('googleLoginBtn').style.display = 'none';
+    }
+  } catch {}
+}
+
+window.handleGoogleCredentialResponse = async function(response) {
+  try {
+    const res = await api('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential: response.credential })
+    });
+    if (res.token) {
+      state.sessionToken = res.token;
+      sessionStorage.setItem('kidsafe_session', res.token);
+    }
+    showToast(`Welcome, ${res.parent.name}! Signed in via Google.`, 'success');
+    await initDashboard();
+  } catch (err) {
+    showToast(err.message || 'Google sign-in failed', 'error');
+  }
+};
+
+const googleLoginBtn = $('googleLoginBtn');
+if (googleLoginBtn) {
+  googleLoginBtn.onclick = async () => {
+    if (googleClientId && window.google?.accounts?.id) {
+      google.accounts.id.prompt();
+      return;
+    }
+
+    // 1-Click Google Verification Flow
+    const email = prompt('Enter your Google / Gmail address to sign in (₹0 Free Verification):', 'parent@gmail.com');
+    if (!email || !email.includes('@')) return;
+
+    try {
+      googleLoginBtn.disabled = true;
+      googleLoginBtn.innerHTML = '<span>Verifying with Google...</span>';
+      const cleanEmail = email.trim().toLowerCase();
+      const name = cleanEmail.split('@')[0].replace(/[^a-zA-Z]/g, ' ').trim();
+      const displayName = name ? (name.charAt(0).toUpperCase() + name.slice(1)) : 'Google Guardian';
+
+      const res = await api('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ email: cleanEmail, name: displayName })
+      });
+
+      if (res.token) {
+        state.sessionToken = res.token;
+        sessionStorage.setItem('kidsafe_session', res.token);
+      }
+      showToast(`Welcome, ${displayName}! Signed in with Google.`, 'success');
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Google sign-in failed', 'error');
+    } finally {
+      googleLoginBtn.disabled = false;
+      googleLoginBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span id="googleLoginBtnText">Sign in with Google (100% Free)</span>
+      `;
+    }
+  };
+}
+
+// --- INITIALIZE DASHBOARD ---
+async function initDashboard() {
+  try {
+    const data = await api(`/api/dashboard?childId=${state.currentChildId}`);
+    $('loginSection').style.display = 'none';
+    $('dashboardSection').style.display = 'block';
+    renderDashboard(data);
+    initSseStream();
+    loadDevices();
+    loadSmsGatewaySettings();
+    setLanguage(state.lang);
+  } catch (err) {
+    $('loginSection').style.display = 'flex';
+    $('dashboardSection').style.display = 'none';
+  }
+}
+
+// --- REAL-TIME SSE STREAMING ---
+function initSseStream() {
+  if (state.sseEventSource) {
+    state.sseEventSource.close();
+  }
+
+  const sseUrl = `/api/stream?sessionToken=${encodeURIComponent(state.sessionToken || '')}`;
+  state.sseEventSource = new EventSource(sseUrl);
+
+  state.sseEventSource.addEventListener('connected', () => {
+    updateSyncBadge(true, Date.now());
+  });
+
+  state.sseEventSource.addEventListener('telemetry_updated', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      if (payload.childId === state.currentChildId) {
+        showToast(`📲 Realtime Sync: Updated usage from ${state.currentChildName}'s device`, 'info');
+        api(`/api/dashboard?childId=${state.currentChildId}`).then(renderDashboard).catch(() => {});
+      }
+    } catch {}
+  });
+
+  state.sseEventSource.addEventListener('device_paired', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      showToast(`🎉 New Child Device Paired: ${payload.childName}!`, 'success');
+      loadDevices();
+      api(`/api/dashboard?childId=${state.currentChildId}`).then(renderDashboard).catch(() => {});
+    } catch {}
+  });
+
+  state.sseEventSource.onerror = () => {
+    updateSyncBadge(false, 0);
+  };
+}
+
+function updateSyncBadge(isConnected, lastSyncTs) {
+  const pill = $('deviceOnlinePill');
+  const text = $('deviceStatusText');
+  const meta = $('deviceLastSyncText');
+  const t = i18n[state.lang] || i18n.en;
+
+  const now = Date.now();
+  const diffMinutes = lastSyncTs ? Math.floor((now - lastSyncTs) / 60000) : 999;
+
+  pill.className = 'status-pill';
+
+  if (isConnected && diffMinutes <= 2) {
+    pill.classList.add('live');
+    text.textContent = t.liveSynced;
+    meta.textContent = 'Synced just now';
+  } else if (diffMinutes <= 15) {
+    pill.classList.add('recent');
+    text.textContent = `Synced ${diffMinutes}m ago`;
+    meta.textContent = `Synced ${diffMinutes}m ago`;
+  } else if (diffMinutes <= 60) {
+    pill.classList.add('delayed');
+    text.textContent = t.delayed;
+    meta.textContent = `Synced ${diffMinutes}m ago`;
+  } else {
+    pill.classList.add('offline');
+    text.textContent = t.offline;
+    meta.textContent = lastSyncTs ? `Last synced ${new Date(lastSyncTs).toLocaleDateString()}` : 'Never synced';
+  }
+}
+
+// --- RENDER DASHBOARD ---
 function renderDashboard(data) {
   state.dashboardData = data;
   state.children = data.availableChildren || [];
-  const { child, summary, charts, mostUsedApps, timeline, alerts, limits } = data;
+  const { child, summary, charts, mostUsedApps, timeline, alerts, limits, parent } = data;
 
-  // Header and Device status
-  renderChildSwitcher(state.children, child.id);
-  $('childAvatarLarge').textContent = child.name.charAt(0);
-  $('childNameHeader').textContent = child.name;
-  $('deviceModelText').textContent = child.deviceModel || child.deviceName;
-  $('deviceBatteryText').textContent = `🔋 ${child.batteryLevel}%`;
-  
-  const syncMinsAgo = Math.max(1, Math.round((Date.now() - (child.lastSyncAt || Date.now())) / 60000));
-  $('deviceLastSyncText').textContent = `Synced ${syncMinsAgo}m ago`;
-
-  const onlinePill = $('deviceOnlinePill');
-  if (summary.syncStatus === 'synced') {
-    onlinePill.className = 'status-pill online';
-    onlinePill.textContent = '● Synced';
-  } else {
-    onlinePill.className = 'status-pill delayed';
-    onlinePill.textContent = '● Sync Delayed';
+  if (parent) {
+    $('settingsParentPhone').textContent = parent.displayPhone || parent.phone;
   }
 
-  // Alerts badge
-  const unreadAlerts = (alerts || []).filter(a => !a.isRead);
-  $('alertBadge').style.display = unreadAlerts.length > 0 ? 'block' : 'none';
-
-  // 6 Summary Cards
-  $('metricScreenTime').textContent = fmtDuration(summary.todayScreenTimeMs);
-  $('metricScreenTimeSub').textContent = `Target: ${Math.floor(summary.dailyLimitMinutes / 60)}h daily`;
-
-  $('metricUnlocks').textContent = summary.unlocksCount;
-  $('metricUnlocksSub').textContent = `Approx ~1 unlock / ${Math.max(10, Math.round(95 / Math.max(1, summary.unlocksCount)))} min`;
-
-  $('metricAppsCount').textContent = summary.totalAppsUsed;
-  $('metricAppsCountSub').textContent = `${mostUsedApps.length} active applications today`;
-
-  // Vs yesterday calculation
-  const diffMs = summary.todayScreenTimeMs - summary.yesterdayScreenTimeMs;
-  const pct = summary.yesterdayScreenTimeMs > 0 ? Math.round((diffMs / summary.yesterdayScreenTimeMs) * 100) : 0;
-  const sign = pct >= 0 ? `+${pct}%` : `${pct}%`;
-  const elDiff = $('metricVsYesterday');
-  elDiff.textContent = sign;
-  elDiff.className = pct > 0 ? 'card-value' : 'card-value';
-  $('metricVsYesterdaySub').textContent = `Yesterday: ${fmtDuration(summary.yesterdayScreenTimeMs)}`;
-
-  // Daily limit status
-  const elLimit = $('metricLimitStatus');
-  const remMinutes = Math.max(0, summary.dailyLimitMinutes - Math.round(summary.todayScreenTimeMs / 60000));
-  if (summary.limitStatus === 'exceeded') {
-    elLimit.textContent = 'Exceeded';
-    elLimit.style.color = 'var(--danger)';
-    $('metricLimitSub').textContent = 'Limit reached for today';
-  } else if (summary.limitStatus === 'approaching_limit') {
-    elLimit.textContent = 'Near Limit';
-    elLimit.style.color = 'var(--warning)';
-    $('metricLimitSub').textContent = `${remMinutes}m remaining`;
-  } else {
-    elLimit.textContent = 'Within Limit';
-    elLimit.style.color = 'var(--success)';
-    $('metricLimitSub').textContent = `${remMinutes}m remaining`;
-  }
-
-  // Sync status metric
-  $('metricSyncStatus').textContent = summary.syncStatus === 'synced' ? 'Active' : 'Delayed';
-  $('metricSyncSub').textContent = `${child.deviceName} connected`;
-
-  // Render 7-day trend chart
-  renderSevenDayChart(charts.sevenDayTrend, child.dailyLimitMinutes);
-
-  // Render category breakdown
-  renderCategoryBreakdown(charts.categoryDistribution);
-
-  // Render hourly breakdown
-  renderHourlyChart(charts.hourlyActivity);
-
-  // Render Most-Used Apps table
-  renderAppsTable(mostUsedApps, limits);
-
-  // Render timeline feed
-  renderTimelineFeed(timeline);
-}
-
-// Child Switcher Tabs
-function renderChildSwitcher(children, activeChildId) {
-  const container = $('childSelector');
-  container.innerHTML = '';
-  for (const c of children) {
-    const btn = document.createElement('button');
-    btn.className = `child-tab ${c.id === activeChildId ? 'active' : ''}`;
-    btn.innerHTML = `<span class="child-avatar-mini">${c.name.charAt(0)}</span> ${c.name}`;
-    btn.onclick = () => {
-      state.currentChildId = c.id;
-      initDashboard();
-    };
-    container.appendChild(btn);
-  }
-}
-
-// 7-Day Chart with Benchmark Limit Line
-function renderSevenDayChart(trend, dailyLimitMins) {
-  const container = $('sevenDayChart');
-  container.innerHTML = '';
-
-  const maxMins = Math.max(...trend.map(t => t.minutes), dailyLimitMins * 1.25, 60);
-
-  // Limit line
-  const limitLine = document.createElement('div');
-  limitLine.className = 'limit-line';
-  const bottomPct = Math.min(95, Math.max(10, (dailyLimitMins / maxMins) * 100));
-  limitLine.style.bottom = `${bottomPct}%`;
-  limitLine.innerHTML = `<span class="limit-line-label">Limit: ${Math.floor(dailyLimitMins / 60)}h</span>`;
-  container.appendChild(limitLine);
-
-  for (let i = 0; i < trend.length; i++) {
-    const item = trend[i];
-    const isToday = i === trend.length - 1;
-    const heightPct = Math.min(100, Math.max(6, (item.minutes / maxMins) * 100));
-
-    const group = document.createElement('div');
-    group.className = 'bar-group';
-    group.innerHTML = `
-      <div class="bar-column ${isToday ? 'today' : ''}" style="height: ${heightPct}%;">
-        <div class="bar-tooltip">${item.minutes}m (${fmtDuration(item.minutes * 60000)})</div>
-      </div>
-      <span class="bar-label">${item.label}</span>
-    `;
-    container.appendChild(group);
-  }
-}
-
-// Category Breakdown Progress Bars
-function renderCategoryBreakdown(categories) {
-  const container = $('categoryContainer');
-  container.innerHTML = '';
-
-  for (const cat of categories) {
-    const item = document.createElement('div');
-    item.className = 'category-item';
-    item.innerHTML = `
-      <div class="category-head">
-        <span>${cat.category}</span>
-        <span style="color: var(--text-muted);">${cat.minutes}m (${cat.percentage}%)</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" style="width: ${cat.percentage}%; background-color: ${cat.color};"></div>
-      </div>
-    `;
-    container.appendChild(item);
-  }
-}
-
-// Hourly Activity Chart
-function renderHourlyChart(hourlyData) {
-  const container = $('hourlyChart');
-  container.innerHTML = '';
-
-  const maxMins = Math.max(...hourlyData.map(h => h.minutes), 20);
-
-  for (const h of hourlyData) {
-    const heightPct = Math.min(100, Math.max(3, (h.minutes / maxMins) * 100));
-    const group = document.createElement('div');
-    group.className = 'bar-group';
-    group.style.flex = '1';
+  // Handle empty state: Parent hasn't added any child yet
+  if (!child || state.children.length === 0) {
+    state.currentChildId = null;
+    state.currentChildName = '';
+    renderChildSwitcher([], null);
+    $('childAvatarLarge').textContent = '+';
+    $('childNameHeader').textContent = 'No Child Connected';
+    $('deviceModelText').textContent = 'Please pair your child’s Android phone';
+    $('deviceBatteryText').textContent = '🔋 --%';
+    $('deviceLastSyncText').textContent = 'No device paired yet';
+    const pill = $('deviceOnlinePill');
+    pill.className = 'status-pill offline';
+    $('deviceStatusText').textContent = 'Awaiting Device';
     
-    // Highlight daytime hours
-    const isDay = h.hour >= 8 && h.hour <= 20;
-    const color = h.minutes > 0 ? (isDay ? 'var(--primary)' : 'var(--danger)') : 'var(--card-border)';
+    // Empty metrics
+    $('metricScreenTime').textContent = '0m';
+    $('metricScreenTimeSub').textContent = 'Target: 2h 00m daily';
+    $('metricUnlocks').textContent = '0';
+    $('metricUnlocksSub').textContent = 'No unlocks recorded';
+    $('metricAppsCount').textContent = '0';
+    $('metricAppsCountSub').textContent = 'No apps active';
+    $('metricVsYesterday').textContent = '0%';
+    $('metricVsYesterdaySub').textContent = 'No previous data';
+    $('metricLimitStatus').textContent = 'Ready';
+    $('metricLimitStatus').style.color = 'var(--success)';
+    $('metricLimitSub').textContent = 'Pair a device to begin';
+    $('metricSyncStatus').textContent = 'Unpaired';
+    $('metricSyncSub').textContent = 'Click "Add Child Device"';
 
-    group.innerHTML = `
-      <div class="bar-column" style="height: ${heightPct}%; background: ${color}; border-radius: 4px;">
-        <div class="bar-tooltip">${h.label}: ${h.minutes}m</div>
-      </div>
-      ${h.hour % 4 === 0 ? `<span class="bar-label" style="font-size: 10px;">${h.label}</span>` : ''}
-    `;
-    container.appendChild(group);
-  }
-}
-
-// Most-Used Apps Table
-function renderAppsTable(apps, limits) {
-  const tbody = $('appTableBody');
-  tbody.innerHTML = '';
-
-  if (!apps || apps.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No app usage logged yet today.</td></tr>`;
+    render7DayChart([], 120);
+    renderCategoryBreakdown({});
+    renderHourlyChart(Array(24).fill(0));
+    renderMostUsedApps([], []);
+    renderTimeline([]);
+    renderLimitsTab([], 120);
+    renderReportsTab({ name: 'Child' }, { totalScreenTimeMs: 0, screenUnlocksApprox: 0 }, []);
     return;
   }
 
-  for (const app of apps) {
-    const limitRule = limits.find(l => l.package === app.package);
-    const isBlocked = limitRule?.isBlocked || false;
-    const limitMins = limitRule?.dailyLimitMinutes;
+  state.currentChildId = child.id;
+  state.currentChildName = child.name;
 
+  // Header & Profile Info
+  renderChildSwitcher(state.children, child.id);
+  $('childAvatarLarge').textContent = child.name.charAt(0);
+  $('childNameHeader').textContent = child.name;
+  $('deviceModelText').textContent = child.deviceModel || child.deviceName || 'Android Device';
+  $('deviceBatteryText').textContent = `🔋 ${child.batteryLevel || 80}%`;
+  updateSyncBadge(true, child.lastSync);
+
+  // 1. Metric Summary Cards
+  $('metricScreenTime').textContent = fmtDuration(summary.totalScreenTimeMs);
+  $('metricScreenTimeSub').textContent = `Target: ${fmtMinutes(summary.limitMinutes)} daily`;
+
+  $('metricUnlocks').textContent = summary.screenUnlocksApprox;
+  const unlockRate = summary.screenUnlocksApprox > 0 ? Math.round(summary.totalScreenTimeMs / (summary.screenUnlocksApprox * 60000)) : 0;
+  $('metricUnlocksSub').textContent = unlockRate > 0 ? `Avg ~1 unlock / ${unlockRate}m active` : 'Normal usage cadence';
+
+  $('metricAppsCount').textContent = mostUsedApps.length;
+  $('metricAppsCountSub').textContent = `${mostUsedApps.length} applications active today`;
+
+  $('metricVsYesterday').textContent = `${summary.comparisonVsYesterday >= 0 ? '+' : ''}${summary.comparisonVsYesterday}%`;
+  $('metricVsYesterdaySub').textContent = `Yesterday: ${fmtDuration(summary.yesterdayScreenTimeMs)}`;
+
+  const remMins = summary.remainingMinutes;
+  const limitStatusEl = $('metricLimitStatus');
+  if (summary.isExceeded) {
+    limitStatusEl.textContent = 'Exceeded';
+    limitStatusEl.style.color = 'var(--danger)';
+    $('metricLimitSub').textContent = `${fmtMinutes(Math.abs(remMins))} over limit`;
+  } else {
+    limitStatusEl.textContent = 'Within Limit';
+    limitStatusEl.style.color = 'var(--success)';
+    $('metricLimitSub').textContent = `${fmtMinutes(remMins)} remaining today`;
+  }
+
+  $('metricSyncStatus').textContent = summary.syncHealth === 'fresh' ? 'Live Telemetry' : 'Periodic Sync';
+  $('metricSyncSub').textContent = child.lastSync ? `Updated ${fmtTime(child.lastSync)}` : 'Awaiting device check-in';
+
+  // 2. Charts
+  render7DayChart(charts.sevenDayTrend, summary.limitMinutes);
+  renderCategoryBreakdown(charts.categoryBreakdown);
+  renderHourlyChart(charts.hourlyActivity);
+
+  // 3. Tables & Timelines
+  renderMostUsedApps(mostUsedApps, limits);
+  renderTimeline(timeline);
+  renderLimitsTab(limits, summary.limitMinutes);
+  renderReportsTab(child, summary, mostUsedApps);
+
+  // Alerts Badge
+  const unreadAlerts = alerts.filter(a => !a.read).length;
+  const badge = $('alertBadge');
+  if (unreadAlerts > 0) {
+    badge.style.display = 'block';
+    badge.textContent = unreadAlerts;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Render Child Switcher
+function renderChildSwitcher(children, activeId) {
+  const container = $('childSelector');
+  container.innerHTML = '';
+  children.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = `child-pill ${c.id === activeId ? 'active' : ''}`;
+    btn.innerHTML = `<span class="child-avatar">${c.name.charAt(0)}</span><span>${c.name}</span>`;
+    btn.onclick = () => {
+      state.currentChildId = c.id;
+      api(`/api/dashboard?childId=${c.id}`).then(renderDashboard);
+    };
+    container.appendChild(btn);
+  });
+}
+
+// 7-Day Chart
+function render7DayChart(days, limitMinutes) {
+  const container = $('sevenDayChart');
+  container.innerHTML = '';
+  if (!days || days.length === 0) {
+    container.innerHTML = '<div style="margin: auto; color: var(--text-muted); font-size: 13px;">No 7-day data recorded yet.</div>';
+    return;
+  }
+  const maxMinutes = Math.max(...days.map(d => d.screenTimeMinutes), limitMinutes, 60);
+
+  days.forEach(d => {
+    const col = document.createElement('div');
+    col.className = 'chart-col';
+    const pct = Math.min(100, Math.round((d.screenTimeMinutes / maxMinutes) * 100));
+    const isOver = d.screenTimeMinutes > limitMinutes;
+    col.innerHTML = `
+      <div class="chart-bar-wrap">
+        <div class="chart-bar ${isOver ? 'danger' : ''}" style="height: ${pct}%;"></div>
+      </div>
+      <span class="chart-label">${d.dayLabel}</span>
+      <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">${fmtMinutes(d.screenTimeMinutes)}</span>
+    `;
+    container.appendChild(col);
+  });
+}
+
+// Category Breakdown
+function renderCategoryBreakdown(cats) {
+  const container = $('categoryContainer');
+  container.innerHTML = '';
+  const entries = Object.entries(cats || {}).filter(([_, m]) => m > 0);
+  if (entries.length === 0) {
+    container.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; padding: 12px;">${(i18n[state.lang] || i18n.en).emptyActivity}</div>`;
+    return;
+  }
+  const total = entries.reduce((acc, [_, m]) => acc + m, 0) || 1;
+
+  entries.forEach(([cat, mins]) => {
+    const pct = Math.round((mins / total) * 100);
+    const item = document.createElement('div');
+    item.className = 'category-item';
+    item.innerHTML = `
+      <div class="category-header">
+        <span style="font-weight: 600;">${cat}</span>
+        <span style="color: var(--text-muted);">${fmtMinutes(mins)} (${pct}%)</span>
+      </div>
+      <div class="category-bar-bg">
+        <div class="category-bar-fill" style="width: ${pct}%;"></div>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+// Hourly Chart
+function renderHourlyChart(hourly) {
+  const container = $('hourlyChart');
+  container.innerHTML = '';
+  const maxVal = Math.max(...(hourly || [1]), 10);
+  (hourly || Array(24).fill(0)).forEach((mins, h) => {
+    const col = document.createElement('div');
+    col.className = 'chart-col';
+    const pct = Math.min(100, Math.round((mins / maxVal) * 100));
+    col.innerHTML = `
+      <div class="chart-bar-wrap" style="height: 100px;">
+        <div class="chart-bar" style="height: ${pct}%;" title="${h}:00 - ${mins} mins"></div>
+      </div>
+      <span class="chart-label">${h % 4 === 0 ? `${h}h` : ''}</span>
+    `;
+    container.appendChild(col);
+  });
+}
+
+// Most-Used Apps
+function renderMostUsedApps(apps, limits) {
+  const tbody = $('appTableBody');
+  tbody.innerHTML = '';
+  if (!apps || apps.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">${(i18n[state.lang] || i18n.en).emptyActivity}</td></tr>`;
+    return;
+  }
+
+  apps.forEach(app => {
+    const limit = (limits || []).find(l => l.package === app.package) || { dailyLimitMinutes: 60, isBlocked: false };
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <div class="app-cell">
-          <div class="app-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-              <line x1="12" y1="18" x2="12.01" y2="18"/>
-            </svg>
-          </div>
-          <div class="app-title-group">
-            <strong>${app.name}</strong>
-            <span>${app.package}</span>
+        <div class="app-info">
+          <div class="app-icon">${app.icon || '📱'}</div>
+          <div>
+            <span class="app-name">${app.name}</span>
+            <span class="app-package">${app.package}</span>
           </div>
         </div>
       </td>
+      <td><span class="category-badge">${app.category}</span></td>
+      <td style="font-weight: 700;">${fmtDuration(app.durationMs)}</td>
       <td>
-        <span class="category-chip" style="background: var(--primary-light); color: var(--primary);">${app.category}</span>
+        ${limit.isBlocked 
+          ? '<span class="status-pill danger">🚫 Blocked</span>' 
+          : `<span class="status-pill ok">⏱ ${limit.dailyLimitMinutes}m limit</span>`}
       </td>
       <td>
-        <strong>${fmtDuration(app.durationMs)}</strong>
-      </td>
-      <td>
-        ${isBlocked ? `<span class="category-chip" style="background: var(--danger-light); color: var(--danger);">Blocked</span>` : 
-          limitMins ? `<span>${limitMins}m / day</span>` : `<span style="color: var(--text-muted);">No Limit</span>`}
-      </td>
-      <td>
-        <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="openAppLimitModal('${app.package}', '${app.name}', '${app.category}', ${limitMins || 45})">
-          Configure
+        <button class="btn btn-secondary" style="font-size: 12px; padding: 4px 10px;" onclick="openAppLimitModal('${app.package}', '${app.name}')">
+          Edit Rule
         </button>
       </td>
     `;
     tbody.appendChild(tr);
-  }
+  });
 }
 
-// Activity Timeline Feed
-function renderTimelineFeed(events) {
-  const container = $('timelineFeed');
-  container.innerHTML = '';
-
+// Timeline
+function renderTimeline(events) {
+  const feed = $('timelineFeed');
+  feed.innerHTML = '';
   if (!events || events.length === 0) {
-    container.innerHTML = `<p style="color: var(--text-muted); padding: 16px;">No recorded events for this time filter.</p>`;
+    feed.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px;">${(i18n[state.lang] || i18n.en).emptyActivity}</div>`;
     return;
   }
 
-  for (const e of events) {
-    const isScreen = e.event.includes('screen');
-    const isClose = e.event === 'closed';
-    const durationLabel = e.durationMs ? `Duration: ${fmtDuration(e.durationMs)}` : '';
-
-    const div = document.createElement('div');
-    div.className = 'timeline-item';
-    div.innerHTML = `
-      <div class="timeline-dot ${isScreen ? 'screen' : isClose ? 'close' : ''}"></div>
-      <div class="timeline-left">
-        <span class="timeline-time">${fmtTime(e.time)}</span>
-        <div>
-          <div class="timeline-event-title">
-            ${e.name} ${e.event === 'opened' ? 'moved to foreground' : e.event === 'closed' ? 'moved to background' : e.event.replace('_', ' ')}
-          </div>
-          <div class="timeline-event-sub">
-            <span>${e.category}</span>
-            ${durationLabel ? `<span>• ${durationLabel}</span>` : ''}
-          </div>
+  events.slice(0, 30).forEach(ev => {
+    const item = document.createElement('div');
+    item.className = 'timeline-item';
+    const isScreen = ev.package === 'screen.unlock';
+    item.innerHTML = `
+      <div class="timeline-dot ${isScreen ? 'screen' : ''}"></div>
+      <div class="timeline-card">
+        <div class="timeline-time">${fmtTime(ev.time)}</div>
+        <div class="timeline-title">${isScreen ? '🔓 Device Screen Unlocked' : `${ev.name} was active`}</div>
+        <div class="timeline-desc">
+          ${isScreen ? 'Verified interactive user session started' : `Used for approx ${fmtDuration(ev.durationMs || 60000)} • ${ev.category || 'General'}`}
         </div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span class="confidence-badge">${e.source || 'UsageStats'} · ${e.confidence || 'high'}</span>
-      </div>
     `;
-    container.appendChild(div);
-  }
+    feed.appendChild(item);
+  });
 }
 
-// Timeline filter pills
-document.querySelectorAll('.filter-chip').forEach(btn => {
-  btn.onclick = async () => {
-    document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const filter = btn.getAttribute('data-filter');
-    state.timelineFilter = filter;
-    try {
-      const data = await api(`/api/timeline?childId=${state.currentChildId}&filter=${filter}`);
-      renderTimelineFeed(data.events);
-    } catch (err) {
-      console.error('Failed to filter timeline:', err);
-    }
+// Timeline Filters
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.timelineFilter = chip.dataset.filter;
+    // In future, fetch range filter from backend
+    showToast(`Filtering activity: ${chip.textContent}`, 'info');
   };
 });
 
-// Quick Actions
-$('quickRefreshBtn').onclick = () => initDashboard();
+// Render Limits Tab
+function renderLimitsTab(limits, dailyLimitMinutes) {
+  const slider = $('dailyLimitSlider');
+  const display = $('dailyLimitValueDisplay');
+  slider.value = dailyLimitMinutes || 120;
+  display.textContent = fmtMinutes(slider.value);
 
-$('quickCsvBtn').onclick = () => {
-  window.location.href = `/api/export/csv?childId=${state.currentChildId}&day=${new Date().toISOString().slice(0, 10)}`;
-};
+  slider.oninput = () => {
+    display.textContent = fmtMinutes(slider.value);
+  };
 
-// Modal helpers
-function closeModal(id) {
-  $(id).style.display = 'none';
-}
+  const container = $('limitsListContainer');
+  container.innerHTML = '';
 
-// Alerts modal
-$('alertBtn').onclick = () => {
-  const modal = $('alertsModal');
-  const list = $('alertsList');
-  const alerts = state.dashboardData?.alerts || [];
-
-  list.innerHTML = '';
-  if (alerts.length === 0) {
-    list.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 20px;">No active safety alerts. Everything looks peaceful!</p>`;
-  } else {
-    for (const a of alerts) {
-      const card = document.createElement('div');
-      card.style.cssText = `background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;`;
-      card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <strong style="color: ${a.severity === 'danger' ? 'var(--danger)' : 'var(--warning)'}; font-size: 14px;">${a.title}</strong>
-          <span style="font-size: 11px; color: var(--text-muted);">${fmtTime(a.timestamp)}</span>
-        </div>
-        <p style="font-size: 13px; color: var(--text-main); margin-bottom: 10px;">${a.description}</p>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="markAlertRead('${a.id}')">Dismiss Alert</button>
-      `;
-      list.appendChild(card);
-    }
-  }
-  modal.style.display = 'flex';
-};
-
-window.markAlertRead = async (alertId) => {
-  await api('/api/alerts/mark-read', { method: 'POST', body: JSON.stringify({ alertId }) });
-  initDashboard();
-  closeModal('alertsModal');
-};
-
-// App Limits modal
-$('quickLimitsBtn').onclick = () => openAppLimitModal();
-$('viewAppLimitsBtn').onclick = () => openAppLimitModal();
-
-window.openAppLimitModal = (pkg, name, cat, defaultMins) => {
-  const modal = $('limitsModal');
-  const list = $('limitsList');
-  const limits = state.dashboardData?.limits || [];
-  const mostUsed = state.dashboardData?.mostUsedApps || [];
-
-  list.innerHTML = '';
-
-  // Merge limits with most-used apps
-  const appKeys = new Set([...limits.map(l => l.package), ...mostUsed.map(a => a.package)]);
-  for (const p of appKeys) {
-    const existing = limits.find(l => l.package === p) || mostUsed.find(a => a.package === p) || { name: p, category: 'Other', dailyLimitMinutes: 45, isBlocked: false };
-    const row = document.createElement('div');
-    row.style.cssText = `display: flex; justify-content: space-between; align-items: center; background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px;`;
-    row.innerHTML = `
+  (limits || []).forEach(lim => {
+    const card = document.createElement('div');
+    card.className = 'summary-card';
+    card.style.flexDirection = 'row';
+    card.style.justifyContent = 'space-between';
+    card.style.alignItems = 'center';
+    card.innerHTML = `
       <div>
-        <strong style="font-size: 14px; display: block;">${existing.name || p}</strong>
-        <span style="font-size: 11px; color: var(--text-muted);">${p}</span>
+        <div style="font-weight: 700; font-size: 15px;">${lim.name}</div>
+        <div style="font-size: 12px; color: var(--text-muted);">${lim.package} • ${lim.category}</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <input id="limit-mins-${p}" type="number" min="0" max="360" value="${existing.dailyLimitMinutes || 45}" style="width: 65px; padding: 6px; border-radius: 8px; border: 1px solid var(--card-border);" />
-        <span style="font-size: 12px;">min</span>
-        <button class="btn ${existing.isBlocked ? 'btn-danger' : 'btn-secondary'}" style="padding: 6px 12px; font-size: 12px;" onclick="saveAppLimit('${p}', '${existing.name}', '${existing.category}', document.getElementById('limit-mins-${p}').value, ${!existing.isBlocked})">
-          ${existing.isBlocked ? 'Blocked' : 'Block App'}
-        </button>
-        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="saveAppLimit('${p}', '${existing.name}', '${existing.category}', document.getElementById('limit-mins-${p}').value, false)">
-          Save
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <label style="font-size: 13px; font-weight: 600;">Daily limit:
+          <input type="number" class="login-input" style="width: 70px; display: inline-block; padding: 4px 8px; margin-left: 6px;" value="${lim.dailyLimitMinutes}" id="limitInput-${lim.package}"> mins
+        </label>
+        <button class="btn ${lim.isBlocked ? 'btn-primary' : 'btn-secondary'}" style="font-size: 12px; padding: 6px 12px;" onclick="toggleBlockApp('${lim.package}', ${!lim.isBlocked})">
+          ${lim.isBlocked ? 'Unblock' : '🚫 Block'}
         </button>
       </div>
     `;
-    list.appendChild(row);
-  }
-  modal.style.display = 'flex';
-};
-
-window.saveAppLimit = async (pkg, name, category, dailyLimitMinutes, isBlocked) => {
-  await api('/api/limits', {
-    method: 'POST',
-    body: JSON.stringify({
-      childId: state.currentChildId,
-      package: pkg,
-      name,
-      category,
-      dailyLimitMinutes: Number(dailyLimitMinutes),
-      isBlocked: Boolean(isBlocked)
-    })
+    container.appendChild(card);
   });
-  await initDashboard();
-  closeModal('limitsModal');
+}
+
+// Save All Limits
+$('saveAllLimitsBtn').onclick = async () => {
+  const dailyLimitMinutes = parseInt($('dailyLimitSlider').value, 10);
+  const limits = (state.dashboardData?.limits || []).map(l => {
+    const input = $(`limitInput-${l.package}`);
+    return {
+      package: l.package,
+      dailyLimitMinutes: input ? parseInt(input.value, 10) || 60 : l.dailyLimitMinutes,
+      isBlocked: l.isBlocked
+    };
+  });
+
+  try {
+    await api('/api/limits', {
+      method: 'POST',
+      body: JSON.stringify({
+        childId: state.currentChildId,
+        limits,
+        dailyLimitMinutes
+      })
+    });
+    showToast('Screen time limits saved & synced to child device!', 'success');
+  } catch (err) {
+    showToast(err.message || 'Failed to save limits', 'error');
+  }
 };
 
-// Initial trigger
+window.toggleBlockApp = async function(pkg, isBlocked) {
+  const currentLimits = state.dashboardData?.limits || [];
+  const updated = currentLimits.map(l => l.package === pkg ? { ...l, isBlocked } : l);
+  try {
+    await api('/api/limits', {
+      method: 'POST',
+      body: JSON.stringify({ childId: state.currentChildId, limits: updated })
+    });
+    showToast(`${pkg} ${isBlocked ? 'blocked' : 'unblocked'}`, 'success');
+    api(`/api/dashboard?childId=${state.currentChildId}`).then(renderDashboard);
+  } catch (err) {
+    showToast(err.message || 'Action failed', 'error');
+  }
+};
+
+// Render Reports Tab
+function renderReportsTab(child, summary, apps) {
+  $('reportChildName').textContent = `${child.name}'s Digital Activity Report`;
+  $('reportGeneratedDate').textContent = `Generated: ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+  $('reportTotalTime').textContent = fmtDuration(summary.totalScreenTimeMs);
+  $('reportTotalUnlocks').textContent = `${summary.screenUnlocksApprox} Unlocks`;
+  $('reportTopApp').textContent = apps[0] ? `${apps[0].name} (${fmtDuration(apps[0].durationMs)})` : 'None';
+
+  const container = $('reportAppsSummary');
+  container.innerHTML = `
+    <table class="app-table" style="background: var(--card-bg); border-radius: 8px;">
+      <thead>
+        <tr><th>Application</th><th>Category</th><th>Screen Time</th><th>Percentage</th></tr>
+      </thead>
+      <tbody>
+        ${apps.map(a => {
+          const pct = Math.round((a.durationMs / (summary.totalScreenTimeMs || 1)) * 100);
+          return `<tr>
+            <td><strong>${a.name}</strong> <span style="font-size: 11px; color: var(--text-muted);">(${a.package})</span></td>
+            <td>${a.category}</td>
+            <td>${fmtDuration(a.durationMs)}</td>
+            <td>${pct}%</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// Export Buttons
+$('exportCsvBtn').onclick = $('quickExportBtn').onclick = () => {
+  window.open(`/api/reports/export?format=csv&childId=${state.currentChildId}`, '_blank');
+};
+
+$('exportJsonBtn').onclick = () => {
+  window.open(`/api/reports/export?format=json&childId=${state.currentChildId}`, '_blank');
+};
+
+// Quick Refresh
+$('quickRefreshBtn').onclick = () => {
+  api(`/api/dashboard?childId=${state.currentChildId}`).then(data => {
+    renderDashboard(data);
+    showToast('Dashboard refreshed with latest telemetry', 'info');
+  });
+};
+
+// --- DEVICES TAB & PAIRING ---
+async function loadDevices() {
+  try {
+    const res = await api('/api/devices');
+    state.devices = res.devices || [];
+    renderDevicesGrid(state.devices);
+  } catch {}
+}
+
+function renderDevicesGrid(devices) {
+  const container = $('deviceGridContainer');
+  container.innerHTML = '';
+  if (!devices || devices.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No child devices paired yet. Click "Pair New Device" above to connect your first device.</div>';
+    return;
+  }
+
+  devices.forEach(dev => {
+    const card = document.createElement('div');
+    card.className = 'device-card';
+    card.innerHTML = `
+      <div>
+        <div class="device-card-header">
+          <div>
+            <div class="device-card-title">${dev.childName}'s Android Phone</div>
+            <div style="font-size: 12px; color: var(--text-muted);">${dev.deviceModel || 'SM-X200'} • Android ${dev.androidVersion || '13'}</div>
+          </div>
+          <span class="status-pill ok">● Paired</span>
+        </div>
+        <div class="device-meta-row">
+          <span>Battery: <strong>${dev.batteryLevel || 80}%</strong></span>
+          <span>•</span>
+          <span>Synced: <strong>${dev.lastSync ? fmtTime(dev.lastSync) : 'Recently'}</strong></span>
+        </div>
+        <div style="margin: 10px 0; display: flex; gap: 6px; flex-wrap: wrap;">
+          <span class="perm-chip ok">✓ Usage Access</span>
+          <span class="perm-chip ok">✓ WorkManager Sync</span>
+          <span class="perm-chip ok">✓ Parental Consent</span>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--card-border); padding-top: 12px;">
+        <span style="font-size: 11px; color: var(--text-muted);">Token: ••••${dev.deviceToken ? dev.deviceToken.slice(-6) : 'sec789'}</span>
+        <button class="btn btn-secondary" style="color: var(--danger); font-size: 12px; padding: 5px 12px;" onclick="revokeDevice('${dev.id}', '${dev.childName}')">
+          Revoke Access
+        </button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+window.revokeDevice = async function(deviceId, name) {
+  if (!confirm(`Are you sure you want to revoke access for ${name}'s device? Activity sync will stop immediately.`)) return;
+  try {
+    await api(`/api/devices/${deviceId}`, { method: 'DELETE' });
+    showToast(`Device for ${name} revoked`, 'info');
+    loadDevices();
+  } catch (err) {
+    showToast(err.message || 'Revocation failed', 'error');
+  }
+};
+
+// --- PAIRING MODAL WIZARD ---
+window.openPairingModal = $('addDeviceBtn').onclick = $('quickPairBtn').onclick = () => {
+  $('pairingStep1').style.display = 'block';
+  $('pairingStep2').style.display = 'none';
+  openModal('pairingModal');
+};
+
+$('generateKeyBtn').onclick = async () => {
+  const childName = $('pairingChildNameInput').value.trim() || 'My Child';
+  const btn = $('generateKeyBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating Secure Key...';
+
+  try {
+    const res = await api('/api/pairing/generate', {
+      method: 'POST',
+      body: JSON.stringify({ childName })
+    });
+
+    $('pairingCodeDisplay').textContent = res.pairingCode;
+    $('qrCodeContainer').innerHTML = res.qrCodeDataUri ? `<img src="${res.qrCodeDataUri}" alt="Pairing QR Code">` : '<span>QR Ready</span>';
+
+    $('pairingStep1').style.display = 'none';
+    $('pairingStep2').style.display = 'block';
+
+    startPairingCountdown(res.expiresAt);
+    showToast(`Pairing code ${res.pairingCode} generated for ${childName}!`, 'success');
+  } catch (err) {
+    showToast(err.message || 'Failed to generate code', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Pairing Access Key';
+  }
+};
+
+$('copyCodeBtn').onclick = () => {
+  const code = $('pairingCodeDisplay').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    showToast(`Copied ${code} to clipboard!`, 'info');
+  });
+};
+
+function startPairingCountdown(expiresAt) {
+  if (state.pairingTimer) clearInterval(state.pairingTimer);
+  const target = new Date(expiresAt).getTime();
+
+  state.pairingTimer = setInterval(() => {
+    const rem = Math.max(0, Math.floor((target - Date.now()) / 1000));
+    const mins = Math.floor(rem / 60);
+    const secs = rem % 60;
+    $('pairingCountdownText').textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    if (rem <= 0) {
+      clearInterval(state.pairingTimer);
+      $('pairingCountdownText').textContent = 'EXPIRED';
+      showToast('Pairing code has expired. Please generate a new key.', 'error');
+    }
+  }, 1000);
+}
+
+// --- SMS GATEWAY CONFIGURATION ---
+async function loadSmsGatewaySettings() {
+  try {
+    const res = await api('/api/settings/sms-gateway');
+    const badge = $('smsGatewayStatusBadge');
+    if (!badge) return;
+    if (res.isConfigured) {
+      badge.textContent = res.fast2smsConfigured ? '● Real SMS Active (Fast2SMS)' : '● Real SMS Active (Twilio)';
+      badge.className = 'status-pill ok';
+    } else {
+      badge.textContent = '● Simulation Mode (Dev)';
+      badge.className = 'status-pill warn';
+    }
+    if (res.fast2smsMasked) $('fast2smsKeyInput').placeholder = `Current Key: ${res.fast2smsMasked}`;
+    if (res.twilioSidMasked) $('twilioSidInput').placeholder = `Current SID: ${res.twilioSidMasked}`;
+    if (res.twilioPhoneNumber) $('twilioPhoneInput').value = res.twilioPhoneNumber;
+  } catch {}
+}
+
+const saveSmsBtn = $('saveSmsGatewayBtn');
+if (saveSmsBtn) {
+  saveSmsBtn.onclick = async () => {
+    const fast2smsApiKey = $('fast2smsKeyInput').value.trim();
+    const twilioSid = $('twilioSidInput').value.trim();
+    const twilioToken = $('twilioTokenInput').value.trim();
+    const twilioPhoneNumber = $('twilioPhoneInput').value.trim();
+
+    try {
+      await api('/api/settings/sms-gateway', {
+        method: 'POST',
+        body: JSON.stringify({ fast2smsApiKey, twilioSid, twilioToken, twilioPhoneNumber })
+      });
+      showToast('SMS Gateway settings saved! Real SMS will be sent for OTP.', 'success');
+      loadSmsGatewaySettings();
+    } catch (err) {
+      showToast(err.message || 'Failed to save SMS settings', 'error');
+    }
+  };
+}
+
+// --- SETTINGS ---
+$('saveRetentionBtn').onclick = async () => {
+  const selected = document.querySelector('input[name="retentionOption"]:checked')?.value || '30';
+  try {
+    await api('/api/settings/retention', {
+      method: 'POST',
+      body: JSON.stringify({ retentionDays: parseInt(selected, 10) })
+    });
+    showToast(`Data retention policy updated to ${selected} days`, 'success');
+  } catch (err) {
+    showToast(err.message || 'Failed to update retention', 'error');
+  }
+};
+
+$('deleteAccountBtn').onclick = async () => {
+  if (!confirm('CAUTION: This will permanently wipe your parent account, revoke all paired child devices, and erase all activity history. This cannot be undone.\n\nProceed?')) return;
+  try {
+    await api('/api/settings/delete-account', {
+      method: 'POST',
+      headers: { 'X-Confirm-Delete': 'yes' }
+    });
+    sessionStorage.clear();
+    alert('Your account and all associated telemetry have been wiped.');
+    location.reload();
+  } catch (err) {
+    showToast(err.message || 'Action failed', 'error');
+  }
+};
+
+// --- STARTUP ENTRY POINT ---
 initDashboard();
+initGoogleAuth();

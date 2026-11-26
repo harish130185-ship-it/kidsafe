@@ -1,1999 +1,369 @@
 {
+  "parents": [
+    {
+      "id": "parent-1795610976201",
+      "phone": "+918000119735",
+      "displayPhone": "+91 80001 19735",
+      "name": "Parent Guardian",
+      "language": "en",
+      "theme": "light",
+      "createdAt": 1795610976204
+    },
+    {
+      "id": "parent-1795612013190",
+      "phone": "+919876543210",
+      "displayPhone": "+91 98765 43210",
+      "name": "Parent Guardian",
+      "language": "en",
+      "theme": "light",
+      "createdAt": 1795612013190
+    },
+    {
+      "id": "parent-google-1795613639311",
+      "googleId": "1795613639311",
+      "email": "haris.parent@gmail.com",
+      "name": "Haris Parent",
+      "picture": "",
+      "phone": "haris.parent@gmail.com",
+      "displayPhone": "haris.parent@gmail.com",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "google",
+      "createdAt": 1795613639311
+    },
+    {
+      "id": "parent-google-1795613678285",
+      "googleId": "1795613678285",
+      "email": "harish130185@gmail.com",
+      "name": "Harish",
+      "picture": "",
+      "phone": "harish130185@gmail.com",
+      "displayPhone": "harish130185@gmail.com",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "google",
+      "createdAt": 1795613678285
+    },
+    {
+      "id": "parent-2fa-1795614219511",
+      "email": "haris.test@gmail.com",
+      "phone": "haris.test@gmail.com",
+      "displayPhone": "haris.test@gmail.com",
+      "name": "haris.test",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "2fa_totp",
+      "is2FaActive": true,
+      "salt": "bafcceec8c41aee29f9d585546e4920d",
+      "passwordHash": "8a89f0d6040ee502948ebb2dadf8bd1539000ffd51fa43579b26460b6e4430d2b850cf093ffe6ea1fbba15330a51c31a9f98c98450226057a9ab9d07299cfe1a",
+      "totpSecret": "JVVWKRIIXW6QVB6EAZONYXI2JFICDEUX",
+      "createdAt": 1795614219511
+    },
+    {
+      "id": "parent-1795668944873",
+      "email": "harishshukla1385@gmail.com",
+      "phone": "harishshukla1385@gmail.com",
+      "displayPhone": "harishshukla1385@gmail.com",
+      "name": "Harish Shukla",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "44bd50362bdab54913461e072e33a32f",
+      "passwordHash": "7da8323cfae7f3416115ae98969f2881480508228a23a3b75ee993bae06ecd5382b843ee0c7b9b160f65247e2d42d83c6bcdc24dccd179214c5b58cc7713f24e",
+      "createdAt": 1795668944873
+    },
+    {
+      "id": "parent-1795669031777",
+      "email": "testparent@kidsafe.com",
+      "phone": "testparent@kidsafe.com",
+      "displayPhone": "testparent@kidsafe.com",
+      "name": "Haris Test Parent",
+      "language": "en",
+      "theme": "light",
+      "authProvider": "password",
+      "salt": "5e2e90dfffa8e30da6a7b1eaec1937cf",
+      "passwordHash": "6aba8cd76d5244eb55b8f3ac3a578977e891bb335dc578ea78af257a96e7c80328b30841aec783536aef1015c09aeb4cb9b4dd926b2d6e0434a7c0daab7dafb7",
+      "createdAt": 1795669031777
+    }
+  ],
   "children": [
     {
-      "id": "child-leo",
-      "name": "Leo",
+      "id": "child-1795611779978",
+      "parentId": "parent-1795610976201",
+      "name": "Himanshu",
       "age": 10,
-      "avatar": "leo",
-      "deviceName": "Galaxy Tab A8",
-      "deviceModel": "Samsung SM-X200",
-      "batteryLevel": 84,
-      "isOnline": true,
-      "lastSyncAt": 1795603453365,
+      "avatar": "himanshu",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
       "dailyLimitMinutes": 120
     },
     {
-      "id": "child-maya",
-      "name": "Maya",
-      "age": 13,
-      "avatar": "maya",
-      "deviceName": "Pixel 6a",
-      "deviceModel": "Google Pixel 6a",
-      "batteryLevel": 92,
+      "id": "child-1795611814441",
+      "parentId": "parent-1795610976201",
+      "name": "Himanshu",
+      "age": 10,
+      "avatar": "himanshu",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795668974183",
+      "parentId": "parent-1795668944873",
+      "name": "Devanshi",
+      "age": 10,
+      "avatar": "devanshi",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795669075214",
+      "parentId": "parent-1795669031777",
+      "name": "Aman",
+      "age": 10,
+      "avatar": "👦",
+      "deviceName": "Samsung Galaxy M34",
+      "deviceModel": "SM-M346B",
+      "batteryLevel": 100,
       "isOnline": true,
-      "lastSyncAt": 1795600315831,
-      "dailyLimitMinutes": 150
+      "lastSyncAt": 1795669253284,
+      "dailyLimitMinutes": 120
+    },
+    {
+      "id": "child-1795672677494",
+      "parentId": "parent-1795668944873",
+      "name": "Devanshi",
+      "age": 10,
+      "avatar": "devanshi",
+      "deviceName": "Pending Setup",
+      "deviceModel": "Android Device",
+      "batteryLevel": 100,
+      "isOnline": false,
+      "lastSyncAt": 0,
+      "dailyLimitMinutes": 120
     }
   ],
-  "reports": {
-    "child-leo": {
-      "2026-11-25": {
-        "day": "2026-11-25",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 6900000,
-        "screenUnlocksApprox": 19,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2700000
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 2100000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 1200000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 900000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "evt-1795603453365-0",
-            "package": "screen.unlock",
-            "name": "Unlock",
-            "event": "screen_unlocked",
-            "time": 13440066253233.146,
-            "category": "Other",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "evt-1795603453365-1",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 13440069853247.344,
-            "durationMs": 1800000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "evt-1795603453365-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 13440073453247.344,
-            "durationMs": 1800000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          30,
-          30,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 20,
-          "Entertainment": 45,
-          "Games": 35,
-          "Social": 0,
-          "Productivity": 15,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795603453365
-      },
-      "2026-11-24": {
-        "day": "2026-11-24",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 5520000,
-        "screenUnlocksApprox": 16,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2318400
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 1932000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 828000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 441600
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-24-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795491900000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-24-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795491960000,
-            "durationMs": 1159200,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-24-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795493119200,
-            "durationMs": 1159200,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-24-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795495500000,
-            "durationMs": 1932000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-24-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795497432000,
-            "durationMs": 1932000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-24-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795497462000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          14,
-          11,
-          0,
-          0,
-          0,
-          18,
-          0,
-          23,
-          0,
-          0,
-          17,
-          9,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 14,
-          "Entertainment": 39,
-          "Games": 32,
-          "Social": 0,
-          "Productivity": 7,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795586815833
-      },
-      "2026-11-23": {
-        "day": "2026-11-23",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 6240000,
-        "screenUnlocksApprox": 18,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2620800
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 2184000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 936000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 499200
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-23-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795405500000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-23-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795405560000,
-            "durationMs": 1310400,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-23-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795406870400,
-            "durationMs": 1310400,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-23-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795409100000,
-            "durationMs": 2184000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-23-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795411284000,
-            "durationMs": 2184000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-23-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795411314000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          16,
-          12,
-          0,
-          0,
-          0,
-          21,
-          0,
-          26,
-          0,
-          0,
-          19,
-          10,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 16,
-          "Entertainment": 44,
-          "Games": 36,
-          "Social": 0,
-          "Productivity": 8,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795500415833
-      },
-      "2026-11-22": {
-        "day": "2026-11-22",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 6960000,
-        "screenUnlocksApprox": 20,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2923200
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 2436000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 1044000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 556800
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-22-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795319100000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-22-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795319160000,
-            "durationMs": 1461600,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-22-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795320621600,
-            "durationMs": 1461600,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-22-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795322700000,
-            "durationMs": 2436000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-22-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795325136000,
-            "durationMs": 2436000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-22-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795325166000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          17,
-          14,
-          0,
-          0,
-          0,
-          23,
-          0,
-          29,
-          0,
-          0,
-          21,
-          12,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 17,
-          "Entertainment": 49,
-          "Games": 41,
-          "Social": 0,
-          "Productivity": 9,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795414015833
-      },
-      "2026-11-21": {
-        "day": "2026-11-21",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 4980000,
-        "screenUnlocksApprox": 15,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2091600
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 1743000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 747000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 398400
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-21-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795232700000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-21-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795232760000,
-            "durationMs": 1045800,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-21-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795233805800,
-            "durationMs": 1045800,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-21-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795236300000,
-            "durationMs": 1743000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-21-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795238043000,
-            "durationMs": 1743000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-21-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795238073000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          12,
-          10,
-          0,
-          0,
-          0,
-          17,
-          0,
-          21,
-          0,
-          0,
-          15,
-          8,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 12,
-          "Entertainment": 35,
-          "Games": 29,
-          "Social": 0,
-          "Productivity": 7,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795327615833
-      },
-      "2026-11-20": {
-        "day": "2026-11-20",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 5700000,
-        "screenUnlocksApprox": 17,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2394000
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 1995000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 855000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 456000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-20-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795146300000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-20-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795146360000,
-            "durationMs": 1197000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-20-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795147557000,
-            "durationMs": 1197000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-20-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795149900000,
-            "durationMs": 1995000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-20-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795151895000,
-            "durationMs": 1995000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-20-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795151925000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          14,
-          11,
-          0,
-          0,
-          0,
-          19,
-          0,
-          24,
-          0,
-          0,
-          17,
-          10,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 14,
-          "Entertainment": 40,
-          "Games": 33,
-          "Social": 0,
-          "Productivity": 8,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795241215833
-      },
-      "2026-11-19": {
-        "day": "2026-11-19",
-        "childId": "child-leo",
-        "totalScreenTimeMs": 6420000,
-        "screenUnlocksApprox": 18,
-        "apps": [
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2696400
-          },
-          {
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "category": "Games",
-            "icon": "gamepad-2",
-            "durationMs": 2247000
-          },
-          {
-            "package": "org.khanacademy.android",
-            "name": "Khan Academy",
-            "category": "Education",
-            "icon": "book-open",
-            "durationMs": 963000
-          },
-          {
-            "package": "com.android.chrome",
-            "name": "Google Chrome",
-            "category": "Productivity",
-            "icon": "globe",
-            "durationMs": 513600
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-leo-2026-11-19-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795059900000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-19-2",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795059960000,
-            "durationMs": 1348200,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-19-3",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795061308200,
-            "durationMs": 1348200,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-19-4",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "opened",
-            "time": 1795063500000,
-            "durationMs": 2247000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-19-5",
-            "package": "com.roblox.client",
-            "name": "Roblox",
-            "event": "closed",
-            "time": 1795065747000,
-            "durationMs": 2247000,
-            "category": "Games",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-leo-2026-11-19-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795065777000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          16,
-          13,
-          0,
-          0,
-          0,
-          21,
-          0,
-          27,
-          0,
-          0,
-          19,
-          11,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 16,
-          "Entertainment": 45,
-          "Games": 37,
-          "Social": 0,
-          "Productivity": 9,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795154815833
-      }
-    },
-    "child-maya": {
-      "2026-11-25": {
-        "day": "2026-11-25",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 7800000,
-        "screenUnlocksApprox": 22,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 2964000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2340000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1560000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 936000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-25-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795578300000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-25-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795578360000,
-            "durationMs": 1482000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-25-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795579842000,
-            "durationMs": 1482000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-25-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795581900000,
-            "durationMs": 2340000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-25-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795584240000,
-            "durationMs": 2340000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-25-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795584270000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          20,
-          16,
-          0,
-          0,
-          0,
-          26,
-          0,
-          33,
-          0,
-          0,
-          23,
-          13,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 16,
-          "Entertainment": 65,
-          "Games": 0,
-          "Social": 49,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795601215833
-      },
-      "2026-11-24": {
-        "day": "2026-11-24",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 7500000,
-        "screenUnlocksApprox": 21,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 2850000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2250000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1500000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 900000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-24-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795491900000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-24-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795491960000,
-            "durationMs": 1425000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-24-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795493385000,
-            "durationMs": 1425000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-24-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795495500000,
-            "durationMs": 2250000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-24-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795497750000,
-            "durationMs": 2250000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-24-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795497780000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          19,
-          15,
-          0,
-          0,
-          0,
-          25,
-          0,
-          31,
-          0,
-          0,
-          23,
-          13,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 15,
-          "Entertainment": 63,
-          "Games": 0,
-          "Social": 48,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795586815833
-      },
-      "2026-11-23": {
-        "day": "2026-11-23",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 8400000,
-        "screenUnlocksApprox": 23,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 3192000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2520000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1680000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 1008000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-23-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795405500000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-23-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795405560000,
-            "durationMs": 1596000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-23-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795407156000,
-            "durationMs": 1596000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-23-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795409100000,
-            "durationMs": 2520000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-23-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795411620000,
-            "durationMs": 2520000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-23-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795411650000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          21,
-          17,
-          0,
-          0,
-          0,
-          28,
-          0,
-          35,
-          0,
-          0,
-          25,
-          14,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 17,
-          "Entertainment": 70,
-          "Games": 0,
-          "Social": 53,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795500415833
-      },
-      "2026-11-22": {
-        "day": "2026-11-22",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 9300000,
-        "screenUnlocksApprox": 25,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 3534000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2790000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1860000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 1116000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-22-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795319100000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-22-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795319160000,
-            "durationMs": 1767000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-22-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795320927000,
-            "durationMs": 1767000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-22-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795322700000,
-            "durationMs": 2790000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-22-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795325490000,
-            "durationMs": 2790000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-22-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795325520000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          23,
-          19,
-          0,
-          0,
-          0,
-          31,
-          0,
-          39,
-          0,
-          0,
-          28,
-          16,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 19,
-          "Entertainment": 78,
-          "Games": 0,
-          "Social": 59,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795414015833
-      },
-      "2026-11-21": {
-        "day": "2026-11-21",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 7200000,
-        "screenUnlocksApprox": 20,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 2736000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2160000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1440000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 864000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-21-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795232700000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-21-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795232760000,
-            "durationMs": 1368000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-21-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795234128000,
-            "durationMs": 1368000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-21-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795236300000,
-            "durationMs": 2160000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-21-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795238460000,
-            "durationMs": 2160000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-21-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795238490000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          18,
-          14,
-          0,
-          0,
-          0,
-          24,
-          0,
-          30,
-          0,
-          0,
-          22,
-          12,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 14,
-          "Entertainment": 60,
-          "Games": 0,
-          "Social": 46,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795327615833
-      },
-      "2026-11-20": {
-        "day": "2026-11-20",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 8100000,
-        "screenUnlocksApprox": 22,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 3078000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2430000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1620000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 972000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-20-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795146300000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-20-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795146360000,
-            "durationMs": 1539000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-20-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795147899000,
-            "durationMs": 1539000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-20-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795149900000,
-            "durationMs": 2430000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-20-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795152330000,
-            "durationMs": 2430000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-20-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795152360000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          20,
-          16,
-          0,
-          0,
-          0,
-          27,
-          0,
-          34,
-          0,
-          0,
-          24,
-          14,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 16,
-          "Entertainment": 68,
-          "Games": 0,
-          "Social": 51,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795241215833
-      },
-      "2026-11-19": {
-        "day": "2026-11-19",
-        "childId": "child-maya",
-        "totalScreenTimeMs": 9000000,
-        "screenUnlocksApprox": 24,
-        "apps": [
-          {
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "category": "Social",
-            "icon": "camera",
-            "durationMs": 3420000
-          },
-          {
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "category": "Entertainment",
-            "icon": "youtube",
-            "durationMs": 2700000
-          },
-          {
-            "package": "com.spotify.music",
-            "name": "Spotify Music",
-            "category": "Entertainment",
-            "icon": "music",
-            "durationMs": 1800000
-          },
-          {
-            "package": "com.duolingo",
-            "name": "Duolingo",
-            "category": "Education",
-            "icon": "award",
-            "durationMs": 1080000
-          }
-        ],
-        "timeline": [
-          {
-            "id": "t-child-maya-2026-11-19-1",
-            "package": "screen.unlock",
-            "name": "Device Screen",
-            "event": "screen_unlocked",
-            "time": 1795059900000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-19-2",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "opened",
-            "time": 1795059960000,
-            "durationMs": 1710000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-19-3",
-            "package": "com.instagram.android",
-            "name": "Instagram",
-            "event": "closed",
-            "time": 1795061670000,
-            "durationMs": 1710000,
-            "category": "Social",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-19-4",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "opened",
-            "time": 1795063500000,
-            "durationMs": 2700000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-19-5",
-            "package": "com.google.android.youtube",
-            "name": "YouTube",
-            "event": "closed",
-            "time": 1795066200000,
-            "durationMs": 2700000,
-            "category": "Entertainment",
-            "confidence": "high",
-            "source": "UsageStats"
-          },
-          {
-            "id": "t-child-maya-2026-11-19-6",
-            "package": "screen.lock",
-            "name": "Device Screen",
-            "event": "screen_off",
-            "time": 1795066230000,
-            "category": "System",
-            "confidence": "high",
-            "source": "UsageStats"
-          }
-        ],
-        "hourlyActivity": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          23,
-          18,
-          0,
-          0,
-          0,
-          30,
-          0,
-          38,
-          0,
-          0,
-          27,
-          15,
-          0,
-          0,
-          0
-        ],
-        "categoryBreakdown": {
-          "Education": 18,
-          "Entertainment": 75,
-          "Games": 0,
-          "Social": 57,
-          "Productivity": 0,
-          "System": 0,
-          "Other": 0
-        },
-        "receivedAt": 1795154815833
-      }
+  "devices": [
+    {
+      "id": "dev-1795669253283",
+      "childId": "child-1795669075214",
+      "parentId": "parent-1795669031777",
+      "deviceName": "Samsung Galaxy M34",
+      "deviceModel": "SM-M346B",
+      "androidVersion": "Android 14",
+      "appGuid": "5c4fd9fb-96e4-4a97-818d-c45911da5e0b",
+      "token": "0e5a2de2b6bc13376fed3ff8e7444755eb4096a4aaa2dc61de84ab6a49228c77",
+      "pairedAt": 1795669253284,
+      "lastSyncAt": 1795669253284,
+      "batteryLevel": 88,
+      "isRevoked": false
     }
-  },
+  ],
+  "pairingSessions": [
+    {
+      "id": "pair-1795611779978",
+      "parentId": "parent-1795610976201",
+      "childId": "child-1795611779978",
+      "childName": "Himanshu",
+      "code": "KS-6951",
+      "codeHash": "f5811a23b29d7b1acf7a1730b6fbe0863f49a0232d3ebb7f47f8ce1e4ba238c2",
+      "expiresAt": 1795612379978,
+      "status": "pending",
+      "createdAt": 1795611779978
+    },
+    {
+      "id": "pair-1795611814441",
+      "parentId": "parent-1795610976201",
+      "childId": "child-1795611814441",
+      "childName": "Himanshu",
+      "code": "KS-2180",
+      "codeHash": "b3284f17a7df852da025dccd60133f0b090ee66e1e5398e88f3cc2b86932e82d",
+      "expiresAt": 1795612414441,
+      "status": "pending",
+      "createdAt": 1795611814441
+    },
+    {
+      "id": "pair-1795668974183",
+      "parentId": "parent-1795668944873",
+      "childId": "child-1795668974183",
+      "childName": "Devanshi",
+      "code": "KS-4064",
+      "codeHash": "366cb2d0157f8a917b32a39029fea99c02d77006c546d0310dc3189999d52218",
+      "expiresAt": 1795669574183,
+      "status": "pending",
+      "createdAt": 1795668974184
+    },
+    {
+      "id": "pair-1795669253279",
+      "parentId": "parent-1795669031777",
+      "childId": "child-1795669075214",
+      "childName": "Aman",
+      "code": "KS-7523",
+      "codeHash": "106033b15d8386822f73bdaafe862d3e7eb92184e63ca16b1ada0bd0da7c4cdb",
+      "expiresAt": 1795669853279,
+      "status": "consumed",
+      "createdAt": 1795669253279,
+      "consumedAt": 1795669253284,
+      "deviceId": "dev-1795669253283"
+    },
+    {
+      "id": "pair-1795672677535",
+      "parentId": "parent-1795668944873",
+      "childId": "child-1795672677494",
+      "childName": "Devanshi",
+      "code": "KS-7351",
+      "codeHash": "dd9b13e379d893ad6ce6f33d58b5f57144edbc50c899fd6b16c29142250ed428",
+      "expiresAt": 1795673277534,
+      "status": "pending",
+      "createdAt": 1795672677544
+    }
+  ],
+  "reports": {},
   "limits": {
-    "child-leo": [
-      {
-        "package": "com.roblox.client",
-        "name": "Roblox",
-        "category": "Games",
-        "dailyLimitMinutes": 45,
-        "isBlocked": false
-      },
-      {
-        "package": "com.google.android.youtube",
-        "name": "YouTube",
-        "category": "Entertainment",
-        "dailyLimitMinutes": 60,
-        "isBlocked": false
-      },
-      {
-        "package": "com.snapchat.android",
-        "name": "Snapchat",
-        "category": "Social",
-        "dailyLimitMinutes": 0,
-        "isBlocked": true
-      }
-    ],
-    "child-maya": [
-      {
-        "package": "com.instagram.android",
-        "name": "Instagram",
-        "category": "Social",
-        "dailyLimitMinutes": 45,
-        "isBlocked": false
-      },
-      {
-        "package": "com.google.android.youtube",
-        "name": "YouTube",
-        "category": "Entertainment",
-        "dailyLimitMinutes": 90,
-        "isBlocked": false
-      }
-    ]
+    "child-1795611779978": [],
+    "child-1795611814441": [],
+    "child-1795668974183": [],
+    "child-1795669075214": [],
+    "child-1795672677494": []
   },
-  "alerts": [
+  "alerts": [],
+  "auditLogs": [
     {
-      "id": "alert-1",
-      "childId": "child-leo",
-      "childName": "Leo",
-      "type": "limit_reached",
-      "title": "Roblox daily limit reached",
-      "description": "Leo has reached the 45-minute daily limit on Roblox.",
-      "severity": "warning",
-      "timestamp": 1795599115831,
-      "isRead": false
+      "id": "audit-1795669365851",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669365851
     },
     {
-      "id": "alert-2",
-      "childId": "child-leo",
-      "childName": "Leo",
-      "type": "night_usage",
-      "title": "Activity detected past bedtime",
-      "description": "Device was active at 10:42 PM (bedtime is 9:00 PM).",
-      "severity": "danger",
-      "timestamp": 1795550815831,
-      "isRead": false
+      "id": "audit-1795669253284",
+      "type": "device_paired",
+      "title": "New Device Paired",
+      "details": "Samsung Galaxy M34 (SM-M346B) was successfully paired to Aman.",
+      "timestamp": 1795669253284
+    },
+    {
+      "id": "audit-1795669253267",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669253267
+    },
+    {
+      "id": "audit-1795669075204",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669075204
+    },
+    {
+      "id": "audit-1795669046875",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669046875
+    },
+    {
+      "id": "audit-1795669031926",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Password verified for testparent@kidsafe.com.",
+      "timestamp": 1795669031926
+    },
+    {
+      "id": "audit-1795669031778",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for testparent@kidsafe.com.",
+      "timestamp": 1795669031778
+    },
+    {
+      "id": "audit-1795668944875",
+      "type": "parent_registered",
+      "title": "New Parent Account Created",
+      "details": "Account registered for harishshukla1385@gmail.com.",
+      "timestamp": 1795668944875
+    },
+    {
+      "id": "audit-1795668472103",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795668472103
+    },
+    {
+      "id": "audit-1795614611914",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795614611914
+    },
+    {
+      "id": "audit-1795614341986",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795614341986
+    },
+    {
+      "id": "audit-1795614219904",
+      "type": "parent_2fa_login",
+      "title": "Parent Signed In with 2FA",
+      "details": "Password & 2FA verified for haris.test@gmail.com.",
+      "timestamp": 1795614219904
+    },
+    {
+      "id": "audit-1795614219513",
+      "type": "parent_2fa_setup",
+      "title": "Google Authenticator 2FA Configured",
+      "details": "Two-factor authentication successfully enabled for haris.test@gmail.com.",
+      "timestamp": 1795614219513
+    },
+    {
+      "id": "audit-1795613678287",
+      "type": "parent_google_login",
+      "title": "Parent Signed In via Google",
+      "details": "Verified Google account: harish130185@gmail.com (Harish)",
+      "timestamp": 1795613678287
+    },
+    {
+      "id": "audit-1795613639312",
+      "type": "parent_google_login",
+      "title": "Parent Signed In via Google",
+      "details": "Verified Google account: haris.parent@gmail.com (Haris Parent)",
+      "timestamp": 1795613639312
+    },
+    {
+      "id": "audit-1795612013192",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +919876543210",
+      "timestamp": 1795612013192
+    },
+    {
+      "id": "audit-1795611769628",
+      "type": "parent_login",
+      "title": "Parent Signed In",
+      "details": "Signed in via mobile OTP: +918000119735",
+      "timestamp": 1795611769628
     }
-  ]
+  ],
+  "settings": {
+    "dataRetentionDays": 30,
+    "autoPrune": true,
+    "fast2smsApiKey": "",
+    "twilioSid": "",
+    "twilioToken": "",
+    "twilioPhoneNumber": ""
+  }
 }

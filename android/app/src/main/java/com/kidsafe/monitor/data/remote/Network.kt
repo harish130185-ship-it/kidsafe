@@ -54,6 +54,22 @@ data class RemoteLimitItem(
     @SerializedName("isBlocked") val isBlocked: Boolean
 )
 
+data class ClaimPairingRequest(
+    @SerializedName("pairingCode") val pairingCode: String,
+    @SerializedName("deviceName") val deviceName: String,
+    @SerializedName("deviceModel") val deviceModel: String,
+    @SerializedName("androidVersion") val androidVersion: String,
+    @SerializedName("appGuid") val appGuid: String
+)
+
+data class ClaimPairingResponse(
+    @SerializedName("ok") val ok: Boolean,
+    @SerializedName("deviceToken") val deviceToken: String?,
+    @SerializedName("childId") val childId: String?,
+    @SerializedName("childName") val childName: String?,
+    @SerializedName("error") val error: String?
+)
+
 interface KidSafeApiService {
     @POST("api/upload")
     suspend fun uploadReport(
@@ -66,6 +82,11 @@ interface KidSafeApiService {
         @Header("Authorization") bearerToken: String,
         @Query("childId") childId: String
     ): Response<LimitsResponse>
+
+    @POST("api/pairing/claim")
+    suspend fun claimPairing(
+        @Body request: ClaimPairingRequest
+    ): Response<ClaimPairingResponse>
 }
 
 object ApiClient {
