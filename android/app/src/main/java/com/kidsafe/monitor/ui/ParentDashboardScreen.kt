@@ -111,6 +111,11 @@ fun ParentDashboardScreen(
             unlocksCount = finalUnlocks
             appUsageList = loadedApps
             isDataLoaded = true
+
+            // Trigger immediate background sync to web dashboard
+            try {
+                MonitorManager.syncNow(context)
+            } catch (_: Exception) {}
         }
     }
 
@@ -146,17 +151,32 @@ fun ParentDashboardScreen(
                     )
                 }
 
-                Surface(
-                    color = if (isMonitoringActive) SuccessGreen.copy(alpha = 0.15f) else DangerRed.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text(
-                        text = if (isMonitoringActive) "● Active" else "● Inactive",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isMonitoringActive) SuccessGreen else DangerRed
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(
+                        onClick = {
+                            MonitorManager.syncNow(context)
+                            android.widget.Toast.makeText(context, "⚡ Syncing live activity to web dashboard...", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Sync Now",
+                            tint = IndigoPrimary
+                        )
+                    }
+
+                    Surface(
+                        color = if (isMonitoringActive) SuccessGreen.copy(alpha = 0.15f) else DangerRed.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Text(
+                            text = if (isMonitoringActive) "● Active" else "● Inactive",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isMonitoringActive) SuccessGreen else DangerRed
+                        )
+                    }
                 }
             }
         }

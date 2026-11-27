@@ -517,8 +517,9 @@ function initSseStream() {
   // Resilient fast periodic background refresh (ensures instant live telemetry on Vercel Serverless)
   if (!window._dashboardPollInterval) {
     window._dashboardPollInterval = setInterval(() => {
-      if (state.sessionToken && state.currentChildId && $('dashboardSection').style.display !== 'none') {
-        api(`/api/dashboard?childId=${state.currentChildId}`)
+      if (state.sessionToken && $('dashboardSection').style.display !== 'none') {
+        const cId = state.currentChildId || '';
+        api(`/api/dashboard?childId=${cId}&_t=${Date.now()}`)
           .then(data => { if (data && data.child) renderDashboard(data); })
           .catch(() => {});
       }
@@ -1065,9 +1066,16 @@ if (qRefresh) {
     if (svg) svg.style.animation = 'spin 0.8s linear infinite';
     qRefresh.disabled = true;
     try {
-      const data = await api(`/api/dashboard?childId=${state.currentChildId}`);
-      if (data && data.child) renderDashboard(data);
-      showToast('⚡ Instant Refresh: Dashboard updated with latest telemetry', 'success');
+      const targetId = state.currentChildId || '';
+      const data = await api(`/api/dashboard?childId=${targetId}&_t=${Date.now()}`);
+      if (data && data.child) {
+        renderDashboard(data);
+        const mins = Math.round((data.summary?.totalScreenTimeMs || 0) / 60000);
+        showToast(`⚡ Refreshed: ${data.child.name} (${mins}m screen time, ${data.summary?.totalAppsUsed || 0} apps)`, 'success');
+      } else {
+        await initDashboard();
+        showToast('⚡ Refreshed: Dashboard synchronized with server', 'success');
+      }
     } catch (e) {
       showToast(e.message || 'Refresh failed', 'error');
     } finally {

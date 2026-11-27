@@ -203,13 +203,18 @@ class KidSafeSyncWorker(
                 db.activityDao().insertTimelineEvents(timelineList)
             }
 
-            // 3. Sync to Backend if Server URL and Device Token are configured
+            // 3. Sync to Backend (Ensures persistent upload to cloud server)
             val prefs = context.getSharedPreferences("kidsafe_prefs", Context.MODE_PRIVATE)
-            val serverUrl = prefs.getString("server_url", "")?.trim()?.trimEnd('/') ?: ""
-            val deviceToken = prefs.getString("device_token", "")?.trim() ?: ""
-            val childId = prefs.getString("child_id", "child-leo") ?: "child-leo"
+            val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in")?.trim()?.trimEnd('/') ?: "https://kidsafe.railplus.in"
+            val serverUrl = if (rawUrl.isBlank()) "https://kidsafe.railplus.in" else rawUrl
 
-            if (serverUrl.startsWith("http") && deviceToken.isNotBlank()) {
+            val rawToken = prefs.getString("device_token", "kidsafe_device_secret_key_982374982374")?.trim() ?: "kidsafe_device_secret_key_982374982374"
+            val deviceToken = if (rawToken.isBlank()) "kidsafe_device_secret_key_982374982374" else rawToken
+
+            val rawChildId = prefs.getString("child_id", "")?.trim() ?: ""
+            val childId = if (rawChildId.isNotBlank()) rawChildId else "child-devanshi"
+
+            if (serverUrl.startsWith("http")) {
                 val api = ApiClient.create(serverUrl)
 
                 // Read real battery level accurately
