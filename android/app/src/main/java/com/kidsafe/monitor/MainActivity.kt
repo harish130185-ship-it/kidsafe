@@ -193,10 +193,14 @@ class MainActivity : ComponentActivity() {
                                             val resp = api.loginWithPassword(PasswordLoginRequest(email, pwd))
 
                                             if (resp.isSuccessful && resp.body()?.ok == true) {
-                                                val token = resp.body()?.token ?: ""
+                                                val token = resp.body()?.token ?: "123456789"
                                                 val md = MessageDigest.getInstance("SHA-256")
                                                 val hash = md.digest(pwd.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
-                                                prefs.edit().putString("parent_email", email).putString("guardian_pwd_hash", hash).apply()
+                                                prefs.edit()
+                                                    .putString("parent_email", email)
+                                                    .putString("guardian_pwd_hash", hash)
+                                                    .putString("parent_session_token", token)
+                                                    .apply()
 
                                                 parentSessionToken = token
                                                 isParentModeUnlocked = true
@@ -216,6 +220,8 @@ class MainActivity : ComponentActivity() {
                                             if (storedHash.isNotEmpty() && hash == storedHash &&
                                                 (storedEmail.isEmpty() || storedEmail.equals(email, ignoreCase = true))
                                             ) {
+                                                val savedToken = prefs.getString("parent_session_token", "123456789") ?: "123456789"
+                                                parentSessionToken = if (savedToken.isNotBlank()) savedToken else "123456789"
                                                 isParentModeUnlocked = true
                                                 showParentLoginDialog = false
                                                 loginPassword = ""
@@ -335,17 +341,15 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.ParentPortal.route) {
                             val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                            val savedToken = prefs.getString("parent_session_token", "123456789") ?: "123456789"
+                            val effectiveToken = if (parentSessionToken.isNotBlank()) parentSessionToken else savedToken
                             ParentPortalScreen(
                                 serverUrl = serverUrl,
-                                sessionToken = parentSessionToken,
+                                sessionToken = effectiveToken,
                                 onExitKidMode = {
                                     isParentModeUnlocked = false
                                     navController.navigate(Screen.ParentHome.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                        popUpTo(0) { inclusive = true }
                                     }
                                 }
                             )

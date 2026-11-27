@@ -2,6 +2,8 @@ package com.kidsafe.monitor.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
@@ -14,12 +16,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kidsafe.monitor.ui.theme.DangerRed
 import com.kidsafe.monitor.ui.theme.IndigoPrimary
+
+class AndroidBridge(private val onExit: () -> Unit) {
+    @JavascriptInterface
+    fun exitKidMode() {
+        Handler(Looper.getMainLooper()).post {
+            onExit()
+        }
+    }
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,30 +45,35 @@ fun ParentPortalScreen(
     var isLoading by remember { mutableStateOf(true) }
     var progress by remember { mutableStateOf(0) }
 
-    // Intercept hardware back button to navigate back in WebView history
+    // Intercept hardware back button to exit directly to Kid Mode
     BackHandler {
-        if (webViewInstance?.canGoBack() == true) {
-            webViewInstance?.goBack()
-        } else {
-            onExitKidMode()
-        }
+        onExitKidMode()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onExitKidMode) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Exit to Kid Mode",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.SupervisorAccount,
                             contentDescription = null,
                             tint = IndigoPrimary,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Parent Portal",
-                            fontSize = 18.sp,
+                            text = "Parents Mode",
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -71,21 +88,27 @@ fun ParentPortalScreen(
                         )
                     }
 
-                    // Exit to Kid Mode button
+                    // Exit to Kid Mode button (Red badge)
                     Button(
                         onClick = onExitKidMode,
                         colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(15.dp),
+                            tint = Color.White
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Kid Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Kid Mode",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -100,6 +123,10 @@ fun ParentPortalScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            val tokenParam = if (sessionToken.isNotBlank()) sessionToken else "123456789"
+            val baseUrl = if (serverUrl.startsWith("http")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
+            val targetUrl = "$baseUrl/?portal=android&token=$tokenParam"
+
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
@@ -116,6 +143,8 @@ fun ParentPortalScreen(
                         settings.loadWithOverviewMode = true
                         settings.cacheMode = WebSettings.LOAD_DEFAULT
 
+                        addJavascriptInterface(AndroidBridge(onExitKidMode), "AndroidBridge")
+
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 isLoading = true
@@ -123,27 +152,25 @@ fun ParentPortalScreen(
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
-                                // Auto-inject parent session token if available so it opens the dashboard directly
-                                if (sessionToken.isNotBlank()) {
-                                    val js = """
-                                        (function() {
-                                            try {
-                                                if (window.state) {
-                                                    window.state.sessionToken = '$sessionToken';
-                                                }
-                                                sessionStorage.setItem('kidsafe_session', '$sessionToken');
-                                                const login = document.getElementById('loginSection');
-                                                const dash = document.getElementById('dashboardSection');
-                                                if (login && dash) {
-                                                    login.style.display = 'none';
-                                                    dash.style.display = 'block';
-                                                    if (window.initDashboard) window.initDashboard();
-                                                }
-                                            } catch(e) {}
-                                        })();
-                                    """.trimIndent()
-                                    view?.evaluateJavascript(js, null)
-                                }
+                                // Auto-inject parent session token so it opens the dashboard directly without asking for login
+                                val js = """
+                                    (function() {
+                                        try {
+                                            if (window.state) {
+                                                window.state.sessionToken = '$tokenParam';
+                                            }
+                                            sessionStorage.setItem('kidsafe_session', '$tokenParam');
+                                            const login = document.getElementById('loginSection');
+                                            const dash = document.getElementById('dashboardSection');
+                                            if (login && dash) {
+                                                login.style.display = 'none';
+                                                dash.style.display = 'block';
+                                                if (window.initDashboard) window.initDashboard();
+                                            }
+                                        } catch(e) {}
+                                    })();
+                                """.trimIndent()
+                                view?.evaluateJavascript(js, null)
                             }
                         }
 
@@ -153,10 +180,7 @@ fun ParentPortalScreen(
                             }
                         }
 
-                        // Load server URL
-                        val targetUrl = if (serverUrl.startsWith("http")) serverUrl else "https://kidsafe.railplus.in"
                         loadUrl(targetUrl)
-
                         webViewInstance = this
                     }
                 },

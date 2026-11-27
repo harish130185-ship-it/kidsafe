@@ -264,6 +264,10 @@ if (legacyLoginBtn) {
 
 // Sign Out
 $('logoutBtn').onclick = async () => {
+  if (window.AndroidBridge && window.AndroidBridge.exitKidMode) {
+    window.AndroidBridge.exitKidMode();
+    return;
+  }
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   state.sessionToken = '';
   sessionStorage.clear();
@@ -272,6 +276,15 @@ $('logoutBtn').onclick = async () => {
   $('loginSection').style.display = 'flex';
   showToast('Signed out successfully', 'info');
 };
+
+const portalExitKidBtn = $('portalExitKidBtn');
+if (portalExitKidBtn) {
+  portalExitKidBtn.onclick = () => {
+    if (window.AndroidBridge && window.AndroidBridge.exitKidMode) {
+      window.AndroidBridge.exitKidMode();
+    }
+  };
+}
 
 // --- EMAIL & PASSWORD LOGIN & REGISTRATION ---
 let isRegisterMode = false;
@@ -1449,9 +1462,33 @@ if ($('restoreDbFileInput')) {
 }
 
 // --- STARTUP ENTRY POINT ---
-// Always start with the Login Form when opening the website
-state.sessionToken = '';
-sessionStorage.removeItem('kidsafe_session');
-$('loginSection').style.display = 'flex';
-$('dashboardSection').style.display = 'none';
+// Check if running inside Android APK Parent Portal
+const urlParams = new URLSearchParams(window.location.search);
+const isAndroidPortal = urlParams.get('portal') === 'android';
+const tokenParam = urlParams.get('token') || urlParams.get('sessionToken') || sessionStorage.getItem('kidsafe_session');
+
+if (isAndroidPortal) {
+  document.body.classList.add('android-portal-mode');
+  const portalBtn = $('portalExitKidBtn');
+  if (portalBtn) portalBtn.style.display = 'inline-flex';
+}
+
+if (tokenParam) {
+  state.sessionToken = tokenParam;
+  sessionStorage.setItem('kidsafe_session', tokenParam);
+  $('loginSection').style.display = 'none';
+  $('dashboardSection').style.display = 'block';
+  initDashboard().catch(() => {
+    if (!isAndroidPortal) {
+      $('loginSection').style.display = 'flex';
+      $('dashboardSection').style.display = 'none';
+    }
+  });
+} else {
+  // Always start with the Login Form when opening the website directly
+  state.sessionToken = '';
+  sessionStorage.removeItem('kidsafe_session');
+  $('loginSection').style.display = 'flex';
+  $('dashboardSection').style.display = 'none';
+}
 setLanguage(state.lang);

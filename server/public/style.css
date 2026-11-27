@@ -1407,3 +1407,97 @@ body {
   flex-wrap: wrap;
 }
 
+/* ========================================== */
+/* ANDROID PORTAL MODE & MOBILE VIEWPORT      */
+/* ========================================== */
+.android-portal-mode .brand {
+  display: none !important;
+}
+
+.android-portal-mode .app-header {
+  padding: 6px 0 10px 0;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 10px;
+}
+
+.android-portal-mode .app-container {
+  padding: 8px 10px 60px 10px;
+  max-width: 100%;
+}
+
+.android-portal-mode #downloadApkHeaderBtn,
+.android-portal-mode .apk-download-hero-banner,
+.android-portal-mode .login-download-card {
+  display: none !important;
+}
+
+/* Responsive Mobile Navigation & Layout */
+@media (max-width: 768px), (max-device-width: 768px) {
+  .app-container {
+    padding: 10px 10px 60px 10px;
+  }
+  
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header-controls {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Make tabs scroll horizontally without ugly wraps */
+  .nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    white-space: nowrap;
+    gap: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-btn {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  /* 2x2 Grid for Summary Cards */
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px;
+  }
+
+  .summary-card {
+    padding: 12px 14px;
+  }
+
+  .summary-value {
+    font-size: 20px !important;
+  }
+
+  .device-status-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .panel {
+    padding: 14px;
+    border-radius: var(--radius-sm);
+  }
+}
+
