@@ -42,7 +42,8 @@ data class AppUsageUi(
 @Composable
 fun ParentDashboardScreen(
     onNavigateTimeline: () -> Unit,
-    onNavigateLimits: () -> Unit
+    onNavigateLimits: () -> Unit,
+    onSwitchParentMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("kidsafe_prefs", Context.MODE_PRIVATE) }
@@ -178,6 +179,24 @@ fun ParentDashboardScreen(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = onSwitchParentMode,
+                colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SupervisorAccount,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Switch to Parent Mode (Requires Login)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
 
