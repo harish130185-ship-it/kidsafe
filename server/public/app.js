@@ -230,6 +230,9 @@ window.openModal = function(id) {
 window.closeModal = function(id) {
   const m = $(id);
   if (m) m.style.display = 'none';
+  if (id === 'pairingModal' || id === 'removeChildModal') {
+    initDashboard();
+  }
 };
 
 // Legacy Login Toggle
@@ -553,10 +556,34 @@ function updateSyncBadge(isConnected, lastSyncTs) {
   }
 }
 
+// --- PERSISTENT STORAGE LEDGER HELPERS ---
+function getStoredChildren(parentId) {
+  if (!parentId) return [];
+  try {
+    const raw = localStorage.getItem('kidsafe_children_' + parentId);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setStoredChildren(parentId, children) {
+  if (!parentId || !Array.isArray(children)) return;
+  try {
+    localStorage.setItem('kidsafe_children_' + parentId, JSON.stringify(children));
+  } catch {}
+}
+
+function removeStoredChild(parentId, childId) {
+  if (!parentId || !childId) return;
+  const current = getStoredChildren(parentId);
+  const updated = current.filter(c => c.id !== childId);
+  setStoredChildren(parentId, updated);
+}
+
 // --- RENDER DASHBOARD ---
 function renderDashboard(data) {
   state.dashboardData = data;
-  state.children = data.availableChildren || [];
   const { child, summary, charts, mostUsedApps, timeline, alerts, limits, parent } = data;
 
   if (parent) {
@@ -564,7 +591,32 @@ function renderDashboard(data) {
     if (parentEmailElem) {
       parentEmailElem.textContent = parent.email || parent.displayPhone || parent.phone || 'guardian@email.com';
     }
+
+    // --- AUTOMATIC RECOVERY & SYNC OF ADDED CHILDREN ACROSS SERVERLESS INSTANCES ---
+    const parentId = parent.id;
+    const serverChildren = data.availableChildren || [];
+    const localChildren = getStoredChildren(parentId);
+
+    // If local storage has children not recognized by this serverless container instance, restore them:
+    const missingOnServer = localChildren.filter(lc => lc && lc.name && !serverChildren.some(sc => sc.id === lc.id));
+    if (missingOnServer.length > 0) {
+      console.log('[KidSafe] Resyncing preserved child profiles to server:', missingOnServer.map(c => c.name));
+      api('/api/children/sync', {
+        method: 'POST',
+        body: JSON.stringify({ children: localChildren })
+      }).then(syncRes => {
+        if (syncRes && syncRes.children && syncRes.children.length > 0) {
+          state.children = syncRes.children;
+          setStoredChildren(parentId, syncRes.children);
+          renderChildSwitcher(state.children, state.currentChildId || syncRes.children[0]?.id);
+        }
+      }).catch(() => {});
+    } else if (serverChildren.length > 0) {
+      setStoredChildren(parentId, serverChildren);
+    }
   }
+
+  state.children = data.availableChildren || [];
 
   // Handle empty state: Parent hasn't added any child yet
   if (!child || state.children.length === 0) {
@@ -677,23 +729,42 @@ function renderDashboard(data) {
   }
 }
 
-// Render Child Switcher
+// Render Child Switcher (Multi-child Pills Bar & Dropdown)
 function renderChildSwitcher(children, activeId) {
-  const container = $('childSelector');
-  if (container) {
-    container.innerHTML = '';
-    if (children && children.length > 1) {
+  const pillsList = $('childrenPillsList');
+  const addBtn = $('addAnotherChildBtn');
+
+  if (pillsList) {
+    pillsList.innerHTML = '';
+    if (children && children.length > 0) {
       children.forEach(c => {
+        const isActive = c.id === activeId;
         const btn = document.createElement('button');
-        btn.className = `child-pill ${c.id === activeId ? 'active' : ''}`;
-        btn.innerHTML = `<span class="child-avatar">${c.name.charAt(0)}</span><span>${c.name}</span>`;
+        btn.className = `child-profile-pill ${isActive ? 'active' : ''}`;
+        btn.title = `Switch to ${c.name}`;
+        btn.innerHTML = `
+          <span class="child-pill-avatar">${(c.name || 'C').charAt(0).toUpperCase()}</span>
+          <span class="child-pill-name">${c.name}</span>
+          <span class="child-pill-status ${c.isOnline ? 'online' : ''}"></span>
+        `;
         btn.onclick = () => {
-          state.currentChildId = c.id;
-          api(`/api/dashboard?childId=${c.id}`).then(renderDashboard);
+          if (state.currentChildId !== c.id) {
+            state.currentChildId = c.id;
+            state.currentChildName = c.name;
+            api(`/api/dashboard?childId=${c.id}`).then(renderDashboard);
+          }
         };
-        container.appendChild(btn);
+        pillsList.appendChild(btn);
       });
+    } else {
+      pillsList.innerHTML = '<span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">No children added yet</span>';
     }
+  }
+
+  if (addBtn) {
+    addBtn.onclick = () => {
+      openPairingModal();
+    };
   }
 
   // Subheader Dropdown Switcher (only shows if multiple children exist)
@@ -1078,6 +1149,10 @@ window.revokeDevice = async function(deviceId, name) {
 window.deleteChildProfile = async function(childId, name) {
   if (!confirm(`Are you sure you want to completely remove ${name}'s profile? All paired devices, alerts, and usage data will be deleted.`)) return;
   try {
+    const parentId = state.dashboardData?.parent?.id;
+    if (parentId) {
+      removeStoredChild(parentId, childId);
+    }
     await api('/api/children/delete', {
       method: 'POST',
       body: JSON.stringify({ childId })
@@ -1087,7 +1162,7 @@ window.deleteChildProfile = async function(childId, name) {
       state.currentChildId = null;
       state.currentChildName = '';
     }
-    initDashboard();
+    await initDashboard();
   } catch (err) {
     showToast(err.message || 'Failed to remove child profile', 'error');
   }
@@ -1114,9 +1189,14 @@ if (confirmRemoveBtn) {
     confirmRemoveBtn.disabled = true;
     confirmRemoveBtn.textContent = 'Removing...';
     try {
+      const removedId = state.currentChildId;
+      const parentId = state.dashboardData?.parent?.id;
+      if (parentId) {
+        removeStoredChild(parentId, removedId);
+      }
       await api('/api/children/delete', {
         method: 'POST',
-        body: JSON.stringify({ childId: state.currentChildId })
+        body: JSON.stringify({ childId: removedId })
       });
       showToast(`Child profile ${state.currentChildName || ''} removed successfully`, 'success');
       closeModal('removeChildModal');
@@ -1132,15 +1212,69 @@ if (confirmRemoveBtn) {
   };
 }
 
-// --- PAIRING MODAL WIZARD ---
+// --- PAIRING & ADD CHILD MODAL WIZARD ---
 window.openPairingModal = $('addDeviceBtn').onclick = $('quickPairBtn').onclick = () => {
   $('pairingStep1').style.display = 'block';
   $('pairingStep2').style.display = 'none';
+  if ($('pairingChildNameInput')) $('pairingChildNameInput').value = '';
+  if ($('pairingChildAgeInput')) $('pairingChildAgeInput').value = '10';
+  if ($('pairingChildLimitInput')) $('pairingChildLimitInput').value = '120';
   openModal('pairingModal');
 };
 
+// 1. Save Profile Only (Pair Later)
+if ($('saveChildOnlyBtn')) {
+  $('saveChildOnlyBtn').onclick = async () => {
+    const name = ($('pairingChildNameInput')?.value || '').trim();
+    if (!name) {
+      showToast('Please enter child name', 'error');
+      $('pairingChildNameInput')?.focus();
+      return;
+    }
+    const age = parseInt($('pairingChildAgeInput')?.value, 10) || 10;
+    const dailyLimitMinutes = parseInt($('pairingChildLimitInput')?.value, 10) || 120;
+    const btn = $('saveChildOnlyBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving Profile...';
+
+    try {
+      const res = await api('/api/children', {
+        method: 'POST',
+        body: JSON.stringify({ name, age, dailyLimitMinutes })
+      });
+      const newChild = res.child;
+      const parentId = state.dashboardData?.parent?.id;
+      if (parentId && newChild) {
+        const stored = getStoredChildren(parentId);
+        if (!stored.some(c => c.id === newChild.id)) {
+          stored.push(newChild);
+          setStoredChildren(parentId, stored);
+        }
+      }
+      showToast(`Child profile "${name}" added successfully!`, 'success');
+      closeModal('pairingModal');
+      state.currentChildId = newChild.id;
+      state.currentChildName = newChild.name;
+      await initDashboard();
+    } catch (err) {
+      showToast(err.message || 'Failed to add child profile', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '💾 Save Profile Only (Pair Later)';
+    }
+  };
+}
+
+// 2. Save Profile & Generate Pairing Key
 $('generateKeyBtn').onclick = async () => {
-  const childName = $('pairingChildNameInput').value.trim() || 'My Child';
+  const childName = ($('pairingChildNameInput')?.value || '').trim();
+  if (!childName) {
+    showToast('Please enter child name', 'error');
+    $('pairingChildNameInput')?.focus();
+    return;
+  }
+  const childAge = parseInt($('pairingChildAgeInput')?.value, 10) || 10;
+  const dailyLimitMinutes = parseInt($('pairingChildLimitInput')?.value, 10) || 120;
   const btn = $('generateKeyBtn');
   btn.disabled = true;
   btn.textContent = 'Generating Secure Key...';
@@ -1148,11 +1282,24 @@ $('generateKeyBtn').onclick = async () => {
   try {
     const res = await api('/api/pairing/generate', {
       method: 'POST',
-      body: JSON.stringify({ childName })
+      body: JSON.stringify({ childName, childAge, dailyLimitMinutes })
     });
 
     $('pairingCodeDisplay').textContent = res.pairingCode;
-    $('qrCodeContainer').innerHTML = res.qrCodeDataUri ? `<img src="${res.qrCodeDataUri}" alt="Pairing QR Code">` : '<span>QR Ready</span>';
+    $('qrCodeContainer').innerHTML = res.qrDataUrl ? `<img src="${res.qrDataUrl}" alt="Pairing QR Code">` : '<span>QR Ready</span>';
+
+    // Store in local storage to preserve across serverless recycles
+    const parentId = state.dashboardData?.parent?.id;
+    if (parentId && res.child) {
+      const stored = getStoredChildren(parentId);
+      if (!stored.some(c => c.id === res.child.id)) {
+        stored.push(res.child);
+        setStoredChildren(parentId, stored);
+      }
+    }
+
+    state.currentChildId = res.childId;
+    state.currentChildName = res.childName;
 
     $('pairingStep1').style.display = 'none';
     $('pairingStep2').style.display = 'block';
@@ -1163,7 +1310,7 @@ $('generateKeyBtn').onclick = async () => {
     showToast(err.message || 'Failed to generate code', 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Generate Pairing Access Key';
+    btn.textContent = '🔗 Save Profile & Pair Device Now';
   }
 };
 

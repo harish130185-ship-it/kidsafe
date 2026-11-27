@@ -127,19 +127,6 @@
       "dailyLimitMinutes": 120
     },
     {
-      "id": "child-1795611814441",
-      "parentId": "parent-1795610976201",
-      "name": "Himanshu",
-      "age": 10,
-      "avatar": "himanshu",
-      "deviceName": "Pending Setup",
-      "deviceModel": "Android Device",
-      "batteryLevel": 100,
-      "isOnline": false,
-      "lastSyncAt": 0,
-      "dailyLimitMinutes": 120
-    },
-    {
       "id": "child-1795668974183",
       "parentId": "parent-1795668944873",
       "name": "Devanshi",
@@ -163,19 +150,6 @@
       "batteryLevel": 100,
       "isOnline": true,
       "lastSyncAt": 1795669253284,
-      "dailyLimitMinutes": 120
-    },
-    {
-      "id": "child-1795672677494",
-      "parentId": "parent-1795668944873",
-      "name": "Devanshi",
-      "age": 10,
-      "avatar": "devanshi",
-      "deviceName": "Pending Setup",
-      "deviceModel": "Android Device",
-      "batteryLevel": 100,
-      "isOnline": false,
-      "lastSyncAt": 0,
       "dailyLimitMinutes": 120
     }
   ],

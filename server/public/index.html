@@ -184,6 +184,17 @@
       </div>
     </header>
 
+    <!-- MULTI-CHILD SELECTOR BAR -->
+    <div id="childrenTabBar" class="children-tabs-container">
+      <div id="childrenPillsList" class="children-pills-list">
+        <!-- Injected child profile pills -->
+      </div>
+      <button id="addAnotherChildBtn" class="add-child-pill-btn" title="Add another child profile">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Add Child</span>
+      </button>
+    </div>
+
     <!-- DEVICE STATUS SUB-HEADER -->
     <div class="device-status-bar">
       <div class="device-info">
@@ -746,17 +757,42 @@
         <button class="modal-close" onclick="closeModal('pairingModal')">&times;</button>
       </div>
 
-      <!-- Step 1: Profile Name Input -->
+      <!-- Step 1: Profile Details Input -->
       <div id="pairingStep1">
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
-          Enter your child's name to generate a secure single-use pairing key and QR code:
+          Add a child profile and optionally generate an instant device pairing code:
         </p>
-        <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px;">Child Name</label>
-        <input id="pairingChildNameInput" type="text" class="login-input" placeholder="e.g. Leo, Priya, Aarav" value="Leo" style="margin-top: 0;">
 
-        <button id="generateKeyBtn" class="btn btn-primary" style="width: 100%; padding: 12px;">
-          Generate Pairing Access Key
-        </button>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px;">Child's Name</label>
+          <input id="pairingChildNameInput" type="text" class="login-input" placeholder="e.g. Devanshi, Aarav, Leo" style="margin-top: 0;">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div>
+            <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px;">Age</label>
+            <input id="pairingChildAgeInput" type="number" class="login-input" placeholder="10" value="10" min="3" max="18" style="margin-top: 0;">
+          </div>
+          <div>
+            <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px;">Daily Limit</label>
+            <select id="pairingChildLimitInput" class="login-input" style="margin-top: 0; padding: 10px 12px; font-size: 13px;">
+              <option value="60">1 Hour</option>
+              <option value="90">1.5 Hours</option>
+              <option value="120" selected>2 Hours (Standard)</option>
+              <option value="180">3 Hours</option>
+              <option value="240">4 Hours</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="generateKeyBtn" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 700;">
+            🔗 Save Profile & Pair Device Now
+          </button>
+          <button id="saveChildOnlyBtn" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 13px;">
+            💾 Save Profile Only (Pair Later)
+          </button>
+        </div>
       </div>
 
       <!-- Step 2: Show Pairing Code & QR (Initially Hidden) -->

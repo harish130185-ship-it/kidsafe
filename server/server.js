@@ -1023,6 +1023,8 @@ async function requestHandler(req, res) {
         qrDataUrl,
         childId,
         childName: child.name,
+        child,
+        availableChildren: db.children.filter(c => c.parentId === parent.id),
         hostUrl
       });
     }
@@ -1183,25 +1185,32 @@ async function requestHandler(req, res) {
     // 14. POST /api/children: Add child profile
     if (req.method === 'POST' && pathname === '/api/children') {
       const body = JSON.parse(await read(req));
-      if (!body.name || !body.age) return respond(res, 400, { error: 'Name and age are required' });
+      if (!body.name) return respond(res, 400, { error: 'Child name is required' });
       const newChild = {
-        id: `child-${Date.now()}`,
+        id: body.id || `child-${Date.now()}`,
         parentId: parentUser.id,
-        name: body.name.trim(),
-        age: Number(body.age),
-        avatar: body.avatar || body.name.toLowerCase().replace(/[^a-z]/g, ''),
-        deviceName: body.deviceName || 'Android Device',
-        deviceModel: body.deviceModel || 'Phone',
+        name: String(body.name).trim(),
+        age: Number(body.age) || 10,
+        avatar: body.avatar || String(body.name).toLowerCase().replace(/[^a-z]/g, ''),
+        deviceName: body.deviceName || 'Pending Setup',
+        deviceModel: body.deviceModel || 'Android Device',
         batteryLevel: 100,
         isOnline: false,
         lastSyncAt: Date.now(),
         dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120
       };
-      db.children.push(newChild);
-      db.limits[newChild.id] = [];
+      // Check if child already exists by ID
+      const existingIdx = db.children.findIndex(c => c.id === newChild.id);
+      if (existingIdx !== -1) {
+        db.children[existingIdx] = Object.assign(db.children[existingIdx], newChild);
+      } else {
+        db.children.push(newChild);
+      }
+      if (!db.limits[newChild.id]) db.limits[newChild.id] = [];
       await saveDatabase();
       broadcastEvent('child_added', { child: newChild });
-      return respond(res, 201, { ok: true, child: newChild });
+      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
+      return respond(res, 201, { ok: true, child: newChild, availableChildren: parentChildren });
     }
 
     // 14b. POST /api/children/delete or DELETE /api/children: Remove child profile
@@ -1234,7 +1243,45 @@ async function requestHandler(req, res) {
       await saveDatabase();
       broadcastEvent('child_deleted', { childId, childName: removed.name });
 
-      return respond(res, 200, { ok: true, message: `Child profile ${removed.name} removed successfully`, childId });
+      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
+      return respond(res, 200, { ok: true, message: `Child profile ${removed.name} removed successfully`, childId, availableChildren: parentChildren });
+    }
+
+    // 14c. POST /api/children/sync: Restore / sync children across distributed serverless instances
+    if (req.method === 'POST' && pathname === '/api/children/sync') {
+      const body = JSON.parse(await read(req));
+      const incomingChildren = Array.isArray(body.children) ? body.children : [];
+      let updated = false;
+
+      for (const inc of incomingChildren) {
+        if (!inc || !inc.name) continue;
+        const incId = inc.id || `child-${Date.now()}`;
+        const existing = db.children.find(c => c.id === incId);
+        if (!existing) {
+          db.children.push({
+            id: incId,
+            parentId: parentUser.id,
+            name: String(inc.name).trim(),
+            age: Number(inc.age) || 10,
+            avatar: inc.avatar || String(inc.name).toLowerCase().replace(/[^a-z]/g, ''),
+            deviceName: inc.deviceName || 'Pending Setup',
+            deviceModel: inc.deviceModel || 'Android Device',
+            batteryLevel: inc.batteryLevel || 100,
+            isOnline: !!inc.isOnline,
+            lastSyncAt: inc.lastSyncAt || Date.now(),
+            dailyLimitMinutes: Number(inc.dailyLimitMinutes) || 120
+          });
+          if (!db.limits[incId]) db.limits[incId] = [];
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        await saveDatabase();
+      }
+
+      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
+      return respond(res, 200, { ok: true, children: parentChildren });
     }
 
     // 15. GET /api/dashboard: Complete Dashboard with Freshness Indicators

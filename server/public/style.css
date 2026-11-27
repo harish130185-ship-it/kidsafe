@@ -178,6 +178,107 @@ body {
   border: 2px solid var(--card-bg);
 }
 
+/* ========================================== */
+/* MULTI-CHILD PROFILE SWITCHER TABS */
+/* ========================================== */
+.children-tabs-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.children-pills-list {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.child-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 8px;
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  border-radius: 28px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.child-profile-pill:hover {
+  border-color: var(--primary);
+  background: var(--bg);
+  transform: translateY(-1px);
+}
+
+.child-profile-pill.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.25);
+  font-weight: 700;
+}
+
+.child-pill-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.child-profile-pill.active .child-pill-avatar {
+  background: var(--primary);
+  box-shadow: 0 2px 5px rgba(99, 102, 241, 0.4);
+}
+
+.child-pill-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94A3B8;
+  display: inline-block;
+}
+
+.child-pill-status.online {
+  background: #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.add-child-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: transparent;
+  border: 1.5px dashed var(--primary);
+  border-radius: 24px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-child-pill-btn:hover {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
 /* Banner / Active child sub-header */
 .device-status-bar {
   display: flex;
