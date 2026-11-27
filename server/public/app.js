@@ -25,6 +25,7 @@ const i18n = {
     syncFailed: "We couldn't refresh this device's activity. We'll try again automatically.",
     deviceInactive: "This device hasn't synced recently. Check its internet connection and permissions.",
     accessDenied: "You don't have permission to view this device.",
+    downloadApp: 'Download App',
     liveSynced: 'Live Synced',
     delayed: 'Sync Delayed',
     offline: 'Offline'
@@ -50,6 +51,7 @@ const i18n = {
     syncFailed: 'हम इस उपकरण की गतिविधि को रीफ़्रेश नहीं कर सके। हम स्वचालित रूप से पुनः प्रयास करेंगे।',
     deviceInactive: 'इस उपकरण ने हाल ही में सिंक नहीं किया है। कृपया इंटरनेट कनेक्शन और अनुमतियों की जाँच करें।',
     accessDenied: 'आपको इस उपकरण को देखने की अनुमति नहीं है।',
+    downloadApp: 'ऐप डाउनलोड',
     liveSynced: 'लाइव सिंक',
     delayed: 'सिंक विलंबित',
     offline: 'ऑफ़लाइन'
@@ -75,6 +77,7 @@ const i18n = {
     syncFailed: "Activity refresh nahi ho saki. Hum automatic dubara try karenge.",
     deviceInactive: "Ye phone kafi der se sync nahi hua. Internet aur permission check karein.",
     accessDenied: "Aapko is phone ko access karne ki permission nahi hai.",
+    downloadApp: 'App Download',
     liveSynced: 'Live Synced',
     delayed: 'Sync Delayed',
     offline: 'Offline'
@@ -186,6 +189,9 @@ function setLanguage(lang) {
   $('cardTitleSync').textContent = t.cardSync;
   $('addDeviceBtnText').textContent = t.addDevice;
   $('logoutBtnText').textContent = t.signOut;
+  if ($('downloadApkHeaderText') && t.downloadApp) {
+    $('downloadApkHeaderText').textContent = t.downloadApp;
+  }
 
   if (state.dashboardData) {
     renderDashboard(state.dashboardData);
@@ -1464,13 +1470,23 @@ if ($('restoreDbFileInput')) {
 // --- STARTUP ENTRY POINT ---
 // Check if running inside Android APK Parent Portal
 const urlParams = new URLSearchParams(window.location.search);
-const isAndroidPortal = urlParams.get('portal') === 'android';
+const isAndroidPortal = urlParams.get('portal') === 'android' || Boolean(window.AndroidBridge);
 const tokenParam = urlParams.get('token') || urlParams.get('sessionToken') || sessionStorage.getItem('kidsafe_session');
 
 if (isAndroidPortal) {
   document.body.classList.add('android-portal-mode');
   const portalBtn = $('portalExitKidBtn');
   if (portalBtn) portalBtn.style.display = 'inline-flex';
+  const headerDlBtn = $('downloadApkHeaderBtn');
+  if (headerDlBtn) headerDlBtn.style.display = 'none';
+  const loginDlCard = document.querySelector('.login-download-card');
+  if (loginDlCard) loginDlCard.style.display = 'none';
+  const heroDlBanner = document.querySelector('.apk-download-hero-banner');
+  if (heroDlBanner) heroDlBanner.style.display = 'none';
+} else {
+  // Web Browser environment: Ensure APK Download button is fully visible in header and page
+  const headerDlBtn = $('downloadApkHeaderBtn');
+  if (headerDlBtn) headerDlBtn.style.display = 'inline-flex';
 }
 
 if (tokenParam) {
@@ -1492,3 +1508,11 @@ if (tokenParam) {
   $('dashboardSection').style.display = 'none';
 }
 setLanguage(state.lang);
+
+// APK Download click handler with instant visual Toast feedback
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('a[href*="/download/apk"], a[href*="KidSafe-Monitor.apk"], #downloadApkHeaderBtn');
+  if (btn) {
+    showToast('📥 Starting download: KidSafe-Monitor.apk (v1.0.5, 45.8 MB)... Check your downloads!', 'success');
+  }
+});

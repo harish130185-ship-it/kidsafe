@@ -553,16 +553,19 @@ async function requestHandler(req, res) {
     }
 
     // 1. Static Asset Serving
-    if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && (pathname === '/' || pathname === '/index.html')) {
+      if (req.method === 'HEAD') return respond(res, 200, '', 'text/html; charset=utf-8');
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
     }
-    if (req.method === 'GET' && pathname === '/app.js') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/app.js') {
+      if (req.method === 'HEAD') return respond(res, 200, '', 'text/javascript; charset=utf-8');
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8'), 'text/javascript; charset=utf-8');
     }
-    if (req.method === 'GET' && pathname === '/style.css') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/style.css') {
+      if (req.method === 'HEAD') return respond(res, 200, '', 'text/css; charset=utf-8');
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'style.css'), 'utf8'), 'text/css; charset=utf-8');
     }
-    if (req.method === 'GET' && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk' || pathname === '/download' || pathname === '/apk')) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk' || pathname === '/download' || pathname === '/apk')) {
       const rootApkPath = path.join(__dirname, '..', 'KidSafe-Monitor.apk');
       const publicApkPath = path.join(__dirname, 'public', 'KidSafe-Monitor.apk');
       const targetApk = fs.existsSync(rootApkPath) ? rootApkPath : (fs.existsSync(publicApkPath) ? publicApkPath : null);
@@ -573,14 +576,34 @@ async function requestHandler(req, res) {
           'Content-Type': 'application/vnd.android.package-archive',
           'Content-Length': stat.size,
           'Content-Disposition': 'attachment; filename="KidSafe-Monitor.apk"',
+          'Cache-Control': 'no-cache',
           'Access-Control-Allow-Origin': '*'
         });
-        return fs.createReadStream(targetApk).pipe(res);
+        if (req.method === 'HEAD') return res.end();
+        const stream = fs.createReadStream(targetApk);
+        stream.on('error', () => {
+          if (!res.headersSent) res.writeHead(500);
+          res.end();
+        });
+        return stream.pipe(res);
       } else {
         const downloadUrl = process.env.APK_DOWNLOAD_URL || 'https://github.com/harish130185-ship-it/kidsafe/raw/main/KidSafe-Monitor.apk';
         res.writeHead(302, { 'Location': downloadUrl });
         return res.end();
       }
+    }
+
+    // App Version & Update Check Endpoint
+    if (req.method === 'GET' && (pathname === '/api/app-version' || pathname === '/api/version')) {
+      const versionInfo = {
+        ok: true,
+        versionName: process.env.LATEST_APP_VERSION || '1.0.5',
+        versionCode: parseInt(process.env.LATEST_VERSION_CODE || '6', 10),
+        downloadUrl: '/download/apk',
+        releaseNotes: 'KidSafe Monitor latest update with direct update support and bug fixes',
+        publishedAt: '2026-11-27T15:00:00Z'
+      };
+      return respond(res, 200, versionInfo);
     }
 
     // 2. Realtime Server-Sent Events (SSE) Stream

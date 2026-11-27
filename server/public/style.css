@@ -1427,7 +1427,9 @@ body {
 
 .android-portal-mode #downloadApkHeaderBtn,
 .android-portal-mode .apk-download-hero-banner,
-.android-portal-mode .login-download-card {
+.android-portal-mode .login-download-card,
+.android-portal-mode .apk-download-item,
+.android-portal-mode [data-role="app-download"] {
   display: none !important;
 }
 

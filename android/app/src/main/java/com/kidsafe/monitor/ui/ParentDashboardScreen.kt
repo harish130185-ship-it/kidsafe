@@ -2,6 +2,7 @@ package com.kidsafe.monitor.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import androidx.compose.foundation.background
@@ -24,9 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kidsafe.monitor.UsageCollector
 import com.kidsafe.monitor.data.local.AppDatabase
+import com.kidsafe.monitor.data.remote.ApiClient
 import com.kidsafe.monitor.service.MonitorManager
 import com.kidsafe.monitor.ui.theme.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class AppUsageUi(
@@ -46,9 +49,26 @@ fun ParentDashboardScreen(
     onSwitchParentMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("kidsafe_prefs", Context.MODE_PRIVATE) }
     val childName = remember { prefs.getString("child_name", "Child") ?: "Child" }
 
+    val currentPInfo = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (_: Exception) { null }
+    }
+    val currentVersionName = remember { currentPInfo?.versionName ?: "1.0.5" }
+    val currentVersionCode = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            currentPInfo?.longVersionCode?.toInt() ?: 6
+        } else {
+            @Suppress("DEPRECATION")
+            currentPInfo?.versionCode ?: 6
+        }
+    }
+
+    var isCheckingUpdate by remember { mutableStateOf(false) }
     var isMonitoringActive by remember { mutableStateOf(false) }
     var batteryLevel by remember { mutableStateOf(85) }
     var screenTimeMs by remember { mutableStateOf(0L) }
@@ -123,6 +143,59 @@ fun ParentDashboardScreen(
     val totalMins = (screenTimeMs / 60000L).toInt()
     val screenTimeText = if (totalMins >= 60) "${totalMins / 60}h ${totalMins % 60}m" else "${totalMins}m"
 
+    fun checkAppUpdate() {
+        if (isCheckingUpdate) return
+        isCheckingUpdate = true
+        coroutineScope.launch {
+            try {
+                val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                val api = ApiClient.create(serverUrl)
+                val resp = api.checkAppVersion()
+                if (resp.isSuccessful && resp.body() != null) {
+                    val ver = resp.body()!!
+                    val isVersionChanged = ver.versionCode > currentVersionCode ||
+                        !ver.versionName.trim().equals(currentVersionName.trim(), ignoreCase = true)
+
+                    if (isVersionChanged) {
+                        val base = if (serverUrl.startsWith("http")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
+                        val targetUrl = if (ver.downloadUrl.startsWith("http")) ver.downloadUrl else "$base/${ver.downloadUrl.trimStart('/')}"
+
+                        android.widget.Toast.makeText(
+                            context,
+                            "🚀 New update found (v${ver.versionName})! Opening download...",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } else {
+                        android.widget.Toast.makeText(
+                            context,
+                            "✅ App is up to date (v$currentVersionName)",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Unable to check update (${resp.code()})",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Update check failed: ${e.message ?: "Network error"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                isCheckingUpdate = false
+            }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -146,7 +219,7 @@ fun ParentDashboardScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "This Device: ${Build.MODEL}",
+                        text = "This Device: ${Build.MODEL} • App v$currentVersionName",
                         fontSize = 12.sp,
                         color = MutedText
                     )
@@ -181,22 +254,55 @@ fun ParentDashboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
-                onClick = onSwitchParentMode,
-                colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxWidth()
+            // Dual Action Buttons: Switch to Parent Mode & Check for Update
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.SupervisorAccount,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Switch to Parent Mode (Requires Login)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onSwitchParentMode,
+                    colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SupervisorAccount,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Parent Mode", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = { checkAppUpdate() },
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = IndigoPrimary),
+                    enabled = !isCheckingUpdate
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            color = IndigoPrimary,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Checking...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Update App", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

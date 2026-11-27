@@ -82,6 +82,14 @@ data class PasswordLoginResponse(
     @SerializedName("error") val error: String? = null
 )
 
+data class AppVersionResponse(
+    @SerializedName("ok") val ok: Boolean = true,
+    @SerializedName("versionName") val versionName: String,
+    @SerializedName("versionCode") val versionCode: Int,
+    @SerializedName("downloadUrl") val downloadUrl: String,
+    @SerializedName("releaseNotes") val releaseNotes: String? = null
+)
+
 interface KidSafeApiService {
     @POST("api/upload")
     suspend fun uploadReport(
@@ -104,6 +112,9 @@ interface KidSafeApiService {
     suspend fun loginWithPassword(
         @Body request: PasswordLoginRequest
     ): Response<PasswordLoginResponse>
+
+    @GET("api/app-version")
+    suspend fun checkAppVersion(): Response<AppVersionResponse>
 }
 
 object ApiClient {

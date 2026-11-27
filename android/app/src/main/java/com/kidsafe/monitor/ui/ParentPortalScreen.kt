@@ -142,6 +142,7 @@ fun ParentPortalScreen(
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.cacheMode = WebSettings.LOAD_DEFAULT
+                        settings.userAgentString = "${settings.userAgentString} KidSafeAndroidApp/1.0.5"
 
                         addJavascriptInterface(AndroidBridge(onExitKidMode), "AndroidBridge")
 
