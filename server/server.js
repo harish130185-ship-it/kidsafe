@@ -562,7 +562,7 @@ async function requestHandler(req, res) {
     if (req.method === 'GET' && pathname === '/style.css') {
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'style.css'), 'utf8'), 'text/css; charset=utf-8');
     }
-    if (req.method === 'GET' && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk')) {
+    if (req.method === 'GET' && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk' || pathname === '/download' || pathname === '/apk')) {
       const rootApkPath = path.join(__dirname, '..', 'KidSafe-Monitor.apk');
       const publicApkPath = path.join(__dirname, 'public', 'KidSafe-Monitor.apk');
       const targetApk = fs.existsSync(rootApkPath) ? rootApkPath : (fs.existsSync(publicApkPath) ? publicApkPath : null);
@@ -577,7 +577,7 @@ async function requestHandler(req, res) {
         });
         return fs.createReadStream(targetApk).pipe(res);
       } else {
-        const downloadUrl = process.env.APK_DOWNLOAD_URL || 'https://github.com/harish130185-ship-it/kidsafe/releases';
+        const downloadUrl = process.env.APK_DOWNLOAD_URL || 'https://github.com/harish130185-ship-it/kidsafe/raw/main/KidSafe-Monitor.apk';
         res.writeHead(302, { 'Location': downloadUrl });
         return res.end();
       }
