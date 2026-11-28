@@ -1431,10 +1431,14 @@ async function loadDbPersistenceStatus() {
       badge.className = 'status-pill ok';
       badge.textContent = `● Persistent Cloud Active (${res.kvProvider})`;
       note.textContent = `Permanent Cloud storage is connected. Your account (${res.parentCount} guardian(s)), ${res.childCount} child profile(s), and ${res.deviceCount} paired device(s) are permanently preserved across all deployments.`;
+    } else if (res.hasPgUrl && !res.hasPgModule) {
+      badge.className = 'status-pill danger';
+      badge.textContent = '● PostgreSQL Driver Missing';
+      note.textContent = `DATABASE_URL is configured (${res.pgEnvKey || 'env'}), but the "pg" module could not load (${res.pgError || 'check Vercel Root Directory / npm install'}).`;
     } else {
       badge.className = 'status-pill pending';
       badge.textContent = '● Ephemeral Seed Mode (No Cloud DB)';
-      note.textContent = `Warning: No PostgreSQL database (DATABASE_URL / POSTGRES_URL) is connected yet! Kids added now will reset on server sleep or new updates. Connect free Neon Postgres in Vercel Dashboard (Storage -> Create Database -> Neon).`;
+      note.textContent = `Warning: No PostgreSQL database (DATABASE_URL / POSTGRES_URL) is connected to this deployment yet! After connecting Neon in Vercel Storage, trigger a Redeploy in Vercel Dashboard.`;
     }
   } catch (err) {
     // non-fatal

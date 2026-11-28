@@ -4,14 +4,15 @@ const path = require('node:path');
 
 let Pool = null;
 let pgTypes = null;
+let pgLoadError = null;
 try {
   const pg = require('pg');
   Pool = pg.Pool;
   pgTypes = pg.types;
   // Parse PostgreSQL BIGINT (OID 20) as JavaScript Number so timestamps and durations work cleanly
   pgTypes.setTypeParser(20, val => (val === null ? null : Number(val)));
-} catch {
-  // pg not installed; fallback store will be used
+} catch (err) {
+  pgLoadError = err.message;
 }
 
 const isVercel = !!process.env.VERCEL;
@@ -20,12 +21,38 @@ const DIR = path.resolve(process.env.DATA_DIR || defaultDataDir);
 const dataFile = path.join(DIR, 'database.json');
 const seedFile = path.join(__dirname, 'initial-data.json');
 
-const PG_URL =
-  process.env.DATABASE_URL ||
-  process.env.POSTGRES_URL ||
-  process.env.POSTGRES_PRISMA_URL ||
-  process.env.POSTGRES_URL_NON_POOLING ||
-  '';
+function resolvePgConfig() {
+  const preferredKeys = [
+    'DATABASE_URL',
+    'POSTGRES_URL',
+    'POSTGRES_PRISMA_URL',
+    'POSTGRES_URL_NON_POOLING',
+    'DATABASE_URL_UNPOOLED',
+    'NEON_DATABASE_URL',
+    'STORAGE_DATABASE_URL',
+    'STORAGE_POSTGRES_URL'
+  ];
+  for (const key of preferredKeys) {
+    const val = process.env[key];
+    if (val && /^postgres(ql)?:\/\//i.test(val.trim())) {
+      return { url: val.trim(), key };
+    }
+  }
+  // Fallback: detect any custom-prefixed Vercel Storage Postgres variable (e.g. KIDSAFE_DATABASE_URL)
+  for (const [key, val] of Object.entries(process.env)) {
+    if (
+      typeof val === 'string' &&
+      /(_DATABASE_URL|_POSTGRES_URL|_POSTGRES_PRISMA_URL)$/i.test(key) &&
+      /^postgres(ql)?:\/\//i.test(val.trim())
+    ) {
+      return { url: val.trim(), key };
+    }
+  }
+  return { url: '', key: '' };
+}
+
+const { url: PG_URL, key: PG_ENV_KEY } = resolvePgConfig();
+let pgLastError = null;
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
@@ -415,9 +442,11 @@ async function ensurePgReady() {
       `);
       await seedPgFromInitialData(client);
       await client.query('COMMIT');
+      pgLastError = null;
       return true;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
+      pgLastError = err.message;
       pgInitPromise = null;
       throw err;
     } finally {
@@ -570,6 +599,10 @@ async function getStatus() {
     return {
       isPersistentDb: true,
       isPgActive: true,
+      hasPgUrl: true,
+      hasPgModule: true,
+      pgEnvKey: PG_ENV_KEY,
+      pgError: pgLastError,
       isKvActive: isKvActive(),
       kvProvider: getProviderName(),
       isVercel,
@@ -582,6 +615,10 @@ async function getStatus() {
   return {
     isPersistentDb: isKvActive(),
     isPgActive: false,
+    hasPgUrl: Boolean(PG_URL),
+    hasPgModule: Boolean(Pool),
+    pgEnvKey: PG_ENV_KEY || null,
+    pgError: pgLoadError || pgLastError || null,
     isKvActive: isKvActive(),
     kvProvider: getProviderName(),
     isVercel,
