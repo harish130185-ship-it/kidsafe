@@ -85,8 +85,8 @@ const i18n = {
 };
 
 let state = {
-  currentChildId: 'child-leo',
-  currentChildName: 'Leo',
+  currentChildId: '',
+  currentChildName: '',
   children: [],
   dashboardData: null,
   devices: [],
@@ -481,7 +481,8 @@ if (googleLoginBtn) {
 // --- INITIALIZE DASHBOARD ---
 async function initDashboard() {
   try {
-    const data = await api(`/api/dashboard?childId=${state.currentChildId}`);
+    const queryId = encodeURIComponent(state.currentChildId || '');
+    const data = await api(`/api/dashboard?childId=${queryId}`);
     $('loginSection').style.display = 'none';
     $('dashboardSection').style.display = 'block';
     renderDashboard(data);
@@ -491,6 +492,7 @@ async function initDashboard() {
   } catch (err) {
     $('loginSection').style.display = 'flex';
     $('dashboardSection').style.display = 'none';
+    throw err;
   }
 }
 
@@ -537,9 +539,9 @@ function initSseStream() {
   if (!window._dashboardPollInterval) {
     window._dashboardPollInterval = setInterval(() => {
       if (state.sessionToken && $('dashboardSection').style.display !== 'none') {
-        const cId = state.currentChildId || '';
+        const cId = encodeURIComponent(state.currentChildId || '');
         api(`/api/dashboard?childId=${cId}&_t=${Date.now()}`)
-          .then(data => { if (data && data.child) renderDashboard(data); })
+          .then(data => { if (data && data.parent) renderDashboard(data); })
           .catch(() => {});
       }
     }, 4000);
@@ -612,27 +614,36 @@ function renderDashboard(data) {
       parentEmailElem.textContent = parent.email || parent.displayPhone || parent.phone || 'guardian@email.com';
     }
 
-    // --- AUTOMATIC RECOVERY & SYNC OF ADDED CHILDREN ACROSS SERVERLESS INSTANCES ---
+    // --- PERSISTENCE SYNC ---
     const parentId = parent.id;
     const serverChildren = data.availableChildren || [];
-    const localChildren = getStoredChildren(parentId);
 
-    // If local storage has children not recognized by this serverless container instance, restore them:
-    const missingOnServer = localChildren.filter(lc => lc && lc.name && !serverChildren.some(sc => sc.id === lc.id));
-    if (missingOnServer.length > 0) {
-      console.log('[KidSafe] Resyncing preserved child profiles to server:', missingOnServer.map(c => c.name));
-      api('/api/children/sync', {
-        method: 'POST',
-        body: JSON.stringify({ children: localChildren })
-      }).then(syncRes => {
-        if (syncRes && syncRes.children && syncRes.children.length > 0) {
-          state.children = syncRes.children;
-          setStoredChildren(parentId, syncRes.children);
-          renderChildSwitcher(state.children, state.currentChildId || syncRes.children[0]?.id);
-        }
-      }).catch(() => {});
-    } else if (serverChildren.length > 0) {
+    if (data.isPersistentDb) {
+      // Server PostgreSQL/Cloud DB is authoritative: mirror it to localStorage, never resurrect deleted kids
       setStoredChildren(parentId, serverChildren);
+    } else {
+      // Ephemeral fallback mode: preserve children across container recycles
+      const localChildren = getStoredChildren(parentId);
+      const missingOnServer = localChildren.filter(lc => lc && lc.name && !serverChildren.some(sc => sc.id === lc.id));
+      if (missingOnServer.length > 0 && !state._ephemeralSyncInFlight) {
+        state._ephemeralSyncInFlight = true;
+        console.log('[KidSafe] Resyncing preserved child profiles to ephemeral server:', missingOnServer.map(c => c.name));
+        api('/api/children/sync', {
+          method: 'POST',
+          body: JSON.stringify({ children: localChildren })
+        }).then(syncRes => {
+          if (syncRes && syncRes.children && syncRes.children.length > 0) {
+            state.children = syncRes.children;
+            setStoredChildren(parentId, syncRes.children);
+            if (!state.currentChildId) state.currentChildId = syncRes.children[0].id;
+            initDashboard().catch(() => {});
+          }
+        }).catch(() => {}).finally(() => {
+          state._ephemeralSyncInFlight = false;
+        });
+      } else if (serverChildren.length > 0) {
+        setStoredChildren(parentId, serverChildren);
+      }
     }
   }
 
@@ -688,7 +699,8 @@ function renderDashboard(data) {
 
   const validBat = (child.batteryLevel && Number(child.batteryLevel) > 0 && Number(child.batteryLevel) <= 100) ? `${child.batteryLevel}%` : null;
   $('deviceBatteryText').textContent = `🔋 ${validBat || '--%'}`;
-  updateSyncBadge(true, child.lastSync);
+  const lastSyncTs = child.lastSyncAt || child.lastSync || 0;
+  updateSyncBadge(true, lastSyncTs);
 
   if (summary.isPreservedUsage) {
     const pill = $('deviceOnlinePill');
@@ -724,8 +736,8 @@ function renderDashboard(data) {
     $('metricLimitSub').textContent = `${fmtMinutes(remMins)} remaining today`;
   }
 
-  $('metricSyncStatus').textContent = summary.syncHealth === 'fresh' ? 'Live Telemetry' : 'Periodic Sync';
-  $('metricSyncSub').textContent = child.lastSync ? `Updated ${fmtTime(child.lastSync)}` : 'Awaiting device check-in';
+  $('metricSyncStatus').textContent = summary.syncHealth === 'fresh' || summary.syncHealth === 'live' ? 'Live Telemetry' : 'Periodic Sync';
+  $('metricSyncSub').textContent = lastSyncTs ? `Updated ${fmtTime(lastSyncTs)}` : 'Awaiting device check-in';
 
   // 2. Charts
   render7DayChart(charts.sevenDayTrend, summary.limitMinutes);
@@ -739,7 +751,7 @@ function renderDashboard(data) {
   renderReportsTab(child, summary, mostUsedApps);
 
   // Alerts Badge
-  const unreadAlerts = alerts.filter(a => !a.read).length;
+  const unreadAlerts = (alerts || []).filter(a => !(a.isRead ?? a.read)).length;
   const badge = $('alertBadge');
   if (unreadAlerts > 0) {
     badge.style.display = 'block';
@@ -817,19 +829,21 @@ function render7DayChart(days, limitMinutes) {
     container.innerHTML = '<div style="margin: auto; color: var(--text-muted); font-size: 13px;">No 7-day data recorded yet.</div>';
     return;
   }
-  const maxMinutes = Math.max(...days.map(d => d.screenTimeMinutes), limitMinutes, 60);
+  const getMins = d => Number(d.minutes ?? d.screenTimeMinutes ?? 0);
+  const maxMinutes = Math.max(...days.map(getMins), limitMinutes, 60);
 
   days.forEach(d => {
+    const mins = getMins(d);
     const col = document.createElement('div');
     col.className = 'chart-col';
-    const pct = Math.min(100, Math.round((d.screenTimeMinutes / maxMinutes) * 100));
-    const isOver = d.screenTimeMinutes > limitMinutes;
+    const pct = Math.min(100, Math.round((mins / maxMinutes) * 100));
+    const isOver = mins > limitMinutes;
     col.innerHTML = `
       <div class="chart-bar-wrap">
         <div class="chart-bar ${isOver ? 'danger' : ''}" style="height: ${pct}%;"></div>
       </div>
-      <span class="chart-label">${d.dayLabel}</span>
-      <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">${fmtMinutes(d.screenTimeMinutes)}</span>
+      <span class="chart-label">${d.label || d.dayLabel || d.day || ''}</span>
+      <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">${fmtMinutes(mins)}</span>
     `;
     container.appendChild(col);
   });
@@ -950,12 +964,17 @@ function renderTimeline(events) {
 
 // Timeline Filters
 document.querySelectorAll('.filter-chip').forEach(chip => {
-  chip.onclick = () => {
+  chip.onclick = async () => {
     document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     state.timelineFilter = chip.dataset.filter;
-    // In future, fetch range filter from backend
-    showToast(`Filtering activity: ${chip.textContent}`, 'info');
+    if (!state.currentChildId) return;
+    try {
+      const res = await api(`/api/timeline?childId=${encodeURIComponent(state.currentChildId)}&filter=${encodeURIComponent(state.timelineFilter)}`);
+      renderTimeline(res.events || []);
+    } catch (err) {
+      showToast(err.message || 'Failed to load timeline', 'error');
+    }
   };
 });
 
@@ -1136,9 +1155,9 @@ function renderDevicesGrid(devices) {
           <span class="status-pill ok">● Paired</span>
         </div>
         <div class="device-meta-row">
-          <span>Battery: <strong>${dev.batteryLevel || 80}%</strong></span>
+          <span>Battery: <strong>${dev.batteryLevel ? dev.batteryLevel + '%' : '--%'}</strong></span>
           <span>•</span>
-          <span>Synced: <strong>${dev.lastSync ? fmtTime(dev.lastSync) : 'Recently'}</strong></span>
+          <span>Synced: <strong>${(dev.lastSyncAt || dev.lastSync) ? fmtTime(dev.lastSyncAt || dev.lastSync) : 'Recently'}</strong></span>
         </div>
         <div style="margin: 10px 0; display: flex; gap: 6px; flex-wrap: wrap;">
           <span class="perm-chip ok">✓ Usage Access</span>
@@ -1147,7 +1166,7 @@ function renderDevicesGrid(devices) {
         </div>
       </div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--card-border); padding-top: 12px; gap: 8px;">
-        <span style="font-size: 11px; color: var(--text-muted);">Token: ••••${dev.deviceToken ? dev.deviceToken.slice(-6) : 'sec789'}</span>
+        <span style="font-size: 11px; color: var(--text-muted);">Token: ••••${dev.tokenLast6 || (dev.deviceToken ? dev.deviceToken.slice(-6) : 'sec789')}</span>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px;" onclick="revokeDevice('${dev.id}', '${dev.childName}')">
             Revoke Sync
@@ -1404,14 +1423,18 @@ async function loadDbPersistenceStatus() {
     const badge = $('dbPersistenceBadge');
     const note = $('dbPersistenceNote');
     if (!badge) return;
-    if (res.isKvActive) {
+    if (res.isPgActive) {
+      badge.className = 'status-pill ok';
+      badge.textContent = `● Persistent SQL Active (${res.kvProvider})`;
+      note.textContent = `Permanent Cloud PostgreSQL storage is connected. Your account (${res.parentCount} guardian(s)), ${res.childCount} child profile(s), and ${res.deviceCount} paired device(s) are safely stored across restarts, days, and deployments.`;
+    } else if (res.isKvActive) {
       badge.className = 'status-pill ok';
       badge.textContent = `● Persistent Cloud Active (${res.kvProvider})`;
       note.textContent = `Permanent Cloud storage is connected. Your account (${res.parentCount} guardian(s)), ${res.childCount} child profile(s), and ${res.deviceCount} paired device(s) are permanently preserved across all deployments.`;
     } else {
       badge.className = 'status-pill pending';
-      badge.textContent = '● Baseline Seed Active';
-      note.textContent = `Baseline accounts & pairings are preserved in initial seed. To persist live edits across future Vercel deployments, connect Upstash Redis in your Vercel Dashboard (Storage -> Create -> Redis).`;
+      badge.textContent = '● Ephemeral Seed Mode (No Cloud DB)';
+      note.textContent = `Warning: No PostgreSQL database (DATABASE_URL / POSTGRES_URL) is connected yet! Kids added now will reset on server sleep or new updates. Connect free Neon Postgres in Vercel Dashboard (Storage -> Create Database -> Neon).`;
     }
   } catch (err) {
     // non-fatal
@@ -1495,10 +1518,10 @@ if (tokenParam) {
   $('loginSection').style.display = 'none';
   $('dashboardSection').style.display = 'block';
   initDashboard().catch(() => {
-    if (!isAndroidPortal) {
-      $('loginSection').style.display = 'flex';
-      $('dashboardSection').style.display = 'none';
-    }
+    state.sessionToken = '';
+    sessionStorage.removeItem('kidsafe_session');
+    $('loginSection').style.display = 'flex';
+    $('dashboardSection').style.display = 'none';
   });
 } else {
   // Always start with the Login Form when opening the website directly
@@ -1513,6 +1536,6 @@ setLanguage(state.lang);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('a[href*="/download/apk"], a[href*="KidSafe-Monitor.apk"], #downloadApkHeaderBtn');
   if (btn) {
-    showToast('📥 Starting download: KidSafe-Monitor.apk (v1.0.5, 45.8 MB)... Check your downloads!', 'success');
+    showToast('📥 Starting download: KidSafe-Monitor.apk (v1.0.6)... Check your downloads!', 'success');
   }
 });

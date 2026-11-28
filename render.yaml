@@ -9,7 +9,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: "echo 'No build step required (0 npm dependencies)'"
+    buildCommand: "cd server && npm install --omit=dev"
     startCommand: "node server/server.js"
     envVars:
       - key: NODE_ENV

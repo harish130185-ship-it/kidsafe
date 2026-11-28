@@ -123,9 +123,13 @@ fun ParentPortalScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            val tokenParam = if (sessionToken.isNotBlank()) sessionToken else "123456789"
+            val tokenParam = sessionToken.trim()
             val baseUrl = if (serverUrl.startsWith("http")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
-            val targetUrl = "$baseUrl/?portal=android&token=$tokenParam"
+            val targetUrl = if (tokenParam.isNotBlank()) {
+                "$baseUrl/?portal=android&token=${android.net.Uri.encode(tokenParam)}"
+            } else {
+                "$baseUrl/?portal=android"
+            }
 
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -142,7 +146,7 @@ fun ParentPortalScreen(
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.cacheMode = WebSettings.LOAD_DEFAULT
-                        settings.userAgentString = "${settings.userAgentString} KidSafeAndroidApp/1.0.5"
+                        settings.userAgentString = "${settings.userAgentString} KidSafeAndroidApp/1.0.6"
 
                         addJavascriptInterface(AndroidBridge(onExitKidMode), "AndroidBridge")
 
@@ -153,25 +157,24 @@ fun ParentPortalScreen(
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
-                                // Auto-inject parent session token so it opens the dashboard directly without asking for login
-                                val js = """
-                                    (function() {
-                                        try {
-                                            if (window.state) {
-                                                window.state.sessionToken = '$tokenParam';
-                                            }
-                                            sessionStorage.setItem('kidsafe_session', '$tokenParam');
-                                            const login = document.getElementById('loginSection');
-                                            const dash = document.getElementById('dashboardSection');
-                                            if (login && dash) {
-                                                login.style.display = 'none';
-                                                dash.style.display = 'block';
-                                                if (window.initDashboard) window.initDashboard();
-                                            }
-                                        } catch(e) {}
-                                    })();
-                                """.trimIndent()
-                                view?.evaluateJavascript(js, null)
+                                if (tokenParam.isNotBlank()) {
+                                    val escapedToken = tokenParam.replace("\\", "\\\\").replace("'", "\\'")
+                                    val js = """
+                                        (function() {
+                                            try {
+                                                sessionStorage.setItem('kidsafe_session', '$escapedToken');
+                                                const login = document.getElementById('loginSection');
+                                                const dash = document.getElementById('dashboardSection');
+                                                if (login && dash && login.style.display !== 'none') {
+                                                    login.style.display = 'none';
+                                                    dash.style.display = 'block';
+                                                    if (window.initDashboard) window.initDashboard();
+                                                }
+                                            } catch(e) {}
+                                        })();
+                                    """.trimIndent()
+                                    view?.evaluateJavascript(js, null)
+                                }
                             }
                         }
 

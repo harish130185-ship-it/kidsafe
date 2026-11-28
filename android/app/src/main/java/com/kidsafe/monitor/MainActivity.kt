@@ -193,7 +193,11 @@ class MainActivity : ComponentActivity() {
                                             val resp = api.loginWithPassword(PasswordLoginRequest(email, pwd))
 
                                             if (resp.isSuccessful && resp.body()?.ok == true) {
-                                                val token = resp.body()?.token ?: "123456789"
+                                                val token = resp.body()?.token?.trim().orEmpty()
+                                                if (token.isBlank()) {
+                                                    loginError = "Authentication token missing from server"
+                                                    return@launch
+                                                }
                                                 val md = MessageDigest.getInstance("SHA-256")
                                                 val hash = md.digest(pwd.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
                                                 prefs.edit()
@@ -216,12 +220,13 @@ class MainActivity : ComponentActivity() {
                                             val hash = md.digest(pwd.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
                                             val storedHash = prefs.getString("guardian_pwd_hash", "") ?: ""
                                             val storedEmail = prefs.getString("parent_email", "") ?: ""
+                                            val savedToken = prefs.getString("parent_session_token", "")?.trim() ?: ""
 
                                             if (storedHash.isNotEmpty() && hash == storedHash &&
+                                                savedToken.isNotBlank() && savedToken != "123456789" &&
                                                 (storedEmail.isEmpty() || storedEmail.equals(email, ignoreCase = true))
                                             ) {
-                                                val savedToken = prefs.getString("parent_session_token", "123456789") ?: "123456789"
-                                                parentSessionToken = if (savedToken.isNotBlank()) savedToken else "123456789"
+                                                parentSessionToken = savedToken
                                                 isParentModeUnlocked = true
                                                 showParentLoginDialog = false
                                                 loginPassword = ""
@@ -341,7 +346,7 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.ParentPortal.route) {
                             val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
-                            val savedToken = prefs.getString("parent_session_token", "123456789") ?: "123456789"
+                            val savedToken = prefs.getString("parent_session_token", "") ?: ""
                             val effectiveToken = if (parentSessionToken.isNotBlank()) parentSessionToken else savedToken
                             ParentPortalScreen(
                                 serverUrl = serverUrl,

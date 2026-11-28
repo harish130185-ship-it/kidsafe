@@ -70,7 +70,7 @@ object MonitorManager {
         }
 
         val launchIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.EXTRA_DOCK_STATE_UNDOCKED
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -208,13 +208,13 @@ class KidSafeSyncWorker(
             val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in")?.trim()?.trimEnd('/') ?: "https://kidsafe.railplus.in"
             val serverUrl = if (rawUrl.isBlank()) "https://kidsafe.railplus.in" else rawUrl
 
-            val rawToken = prefs.getString("device_token", "kidsafe_device_secret_key_982374982374")?.trim() ?: "kidsafe_device_secret_key_982374982374"
-            val deviceToken = if (rawToken.isBlank()) "kidsafe_device_secret_key_982374982374" else rawToken
+            val rawToken = prefs.getString("device_token", "")?.trim() ?: ""
+            val deviceToken = rawToken
 
             val rawChildId = prefs.getString("child_id", "")?.trim() ?: ""
-            val childId = if (rawChildId.isNotBlank()) rawChildId else "child-devanshi"
+            val childId = rawChildId
 
-            if (serverUrl.startsWith("http")) {
+            if (deviceToken.isNotBlank() && childId.isNotBlank() && serverUrl.startsWith("http")) {
                 val api = ApiClient.create(serverUrl)
 
                 // Read real battery level accurately
@@ -267,6 +267,9 @@ class KidSafeSyncWorker(
                 )
 
                 val response = api.uploadReport("Bearer $deviceToken", request)
+                if (response.code() == 401 || response.code() == 404) {
+                    return@withContext Result.failure()
+                }
                 if (!response.isSuccessful) {
                     return@withContext Result.retry()
                 }

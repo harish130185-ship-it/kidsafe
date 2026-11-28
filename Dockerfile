@@ -11,6 +11,8 @@ WORKDIR /app
 COPY server ./server
 COPY shared ./shared
 
+RUN cd server && npm install --omit=dev
+
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV DATA_DIR=/app/data

@@ -43,7 +43,12 @@ android/app/build/
 android/.gradle/
 .gradle/
 
-# 5. OS & IDE Metadata
+# 5. Dependencies & Build Caches
+node_modules/
+.vercel/
+npm-debug.log*
+
+# 6. OS & IDE Metadata
 .idea/
 *.iml
 .vscode/

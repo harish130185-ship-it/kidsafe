@@ -57,7 +57,7 @@ fun ChildConsentScreen(
     var isMonitoringActive by remember { mutableStateOf(MonitorManager.isConsentGranted(context)) }
     var hasUsageAccess by remember { mutableStateOf(UsageCollector.granted(context)) }
     var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in") }
-    var deviceToken by remember { mutableStateOf(prefs.getString("device_token", "kidsafe_device_secret_key_982374982374") ?: "") }
+    var deviceToken by remember { mutableStateOf(prefs.getString("device_token", "") ?: "") }
     var pairedChildName by remember { mutableStateOf(prefs.getString("child_name", "Not Paired") ?: "Not Paired") }
     var isGuardianConsentChecked by remember { mutableStateOf(isMonitoringActive) }
 
@@ -204,12 +204,16 @@ fun ChildConsentScreen(
                                     val resp = api.loginWithPassword(PasswordLoginRequest(email, pwd))
 
                                     if (resp.isSuccessful && resp.body()?.ok == true) {
-                                        // Cache hash and email for offline fallback
+                                        // Cache hash, email, and session token
                                         val hash = sha256(pwd)
-                                        prefs.edit()
+                                        val editor = prefs.edit()
                                             .putString("parent_email", email)
                                             .putString("guardian_pwd_hash", hash)
-                                            .apply()
+                                        val tok = resp.body()?.token?.trim().orEmpty()
+                                        if (tok.isNotBlank()) {
+                                            editor.putString("parent_session_token", tok)
+                                        }
+                                        editor.apply()
                                         isGuardianUnlocked = true
                                     } else {
                                         loginError = resp.body()?.error ?: "Invalid email or password"
@@ -449,9 +453,15 @@ fun ChildConsentScreen(
 
                                 if (resp.isSuccessful && resp.body()?.ok == true) {
                                     val body = resp.body()!!
-                                    val token = body.deviceToken ?: ""
-                                    val cId = body.childId ?: "child-leo"
-                                    val cName = body.childName ?: "Leo"
+                                    val token = body.deviceToken?.trim().orEmpty()
+                                    val cId = body.childId?.trim().orEmpty()
+                                    val cName = body.childName?.trim().orEmpty().ifBlank { "Child" }
+
+                                    if (token.isBlank() || cId.isBlank()) {
+                                        pairingSuccess = false
+                                        pairingMessage = "Invalid pairing response from server"
+                                        return@launch
+                                    }
 
                                     prefs.edit()
                                         .putString("server_url", serverUrl.trim())

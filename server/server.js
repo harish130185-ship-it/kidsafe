@@ -4,23 +4,14 @@ const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const dbStore = require('./db');
 
 const PORT = Number(process.env.PORT || 8080);
 const PARENT_SECRET = process.env.PARENT_TOKEN || 'kidsafe_parent_secret_key_8923487293847';
 const DEVICE_FALLBACK_TOKEN = process.env.DEVICE_TOKEN || 'kidsafe_device_secret_key_982374982374';
 
-const isVercel = !!process.env.VERCEL;
-const defaultDataDir = isVercel ? '/tmp/kidsafe-data' : path.join(__dirname, 'private-data');
-const DIR = path.resolve(process.env.DATA_DIR || defaultDataDir);
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const DAY_MS = 86400000;
-
-try {
-  fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
-} catch (e) {
-  // Read-only filesystem warning; in-memory fallback will be used
-}
-const dataFile = path.join(DIR, 'database.json');
 
 // --- APP CATALOG & CATEGORIZER ---
 const APP_CATALOG = {
@@ -44,7 +35,7 @@ const APP_CATALOG = {
 
 function categorize(pkg) {
   if (APP_CATALOG[pkg]) return APP_CATALOG[pkg];
-  const lower = pkg.toLowerCase();
+  const lower = String(pkg || '').toLowerCase();
   let category = 'Other';
   let icon = 'app';
   if (lower.includes('game') || lower.includes('play') || lower.includes('runner') || lower.includes('craft')) {
@@ -63,30 +54,16 @@ function categorize(pkg) {
     category = 'Productivity';
     icon = 'briefcase';
   }
-  const cleanName = pkg.split('.').pop() || pkg;
+  const cleanName = String(pkg || '').split('.').pop() || String(pkg || 'App');
   const name = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
   return { name, category, icon };
 }
 
-// --- DATABASE STATE (ZERO HARDCODED DEMO USERS OR CHILDREN) ---
-let db = {
-  parents: [],
-  children: [],
-  devices: [],
-  pairingSessions: [],
-  reports: {}, // reports[childId][day] = report
-  limits: {},
-  alerts: [],
-  auditLogs: [],
-  settings: {
-    dataRetentionDays: 30,
-    autoPrune: true,
-    fast2smsApiKey: process.env.FAST2SMS_API_KEY || '',
-    twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
-    twilioToken: process.env.TWILIO_AUTH_TOKEN || '',
-    twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || ''
-  }
-};
+function sanitizeParent(p) {
+  if (!p) return null;
+  const { salt, passwordHash, totpSecret, ...safe } = p;
+  return safe;
+}
 
 // --- REAL SMS DISPATCHERS ---
 async function sendFast2Sms(apiKey, numbers, otp) {
@@ -103,13 +80,13 @@ async function sendFast2Sms(apiKey, numbers, otp) {
       path: '/dev/bulkV2',
       method: 'POST',
       headers: {
-        'authorization': apiKey,
+        authorization: apiKey,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
     }, res => {
       let body = '';
-      res.on('data', d => body += d);
+      res.on('data', d => (body += d));
       res.on('end', () => {
         try {
           const parsed = JSON.parse(body);
@@ -142,13 +119,13 @@ async function sendTwilioSms(accountSid, authToken, fromNumber, toNumber, otp) {
       path: `/2010-04-01/Accounts/${accountSid}/Messages.json`,
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
+        Authorization: `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(postData)
       }
     }, res => {
       let body = '';
-      res.on('data', d => body += d);
+      res.on('data', d => (body += d));
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) resolve(body);
         else reject(new Error(`Twilio error (${res.statusCode}): ${body}`));
@@ -161,112 +138,10 @@ async function sendTwilioSms(accountSid, authToken, fromNumber, toNumber, otp) {
   });
 }
 
-// --- CLOUD KV & DISK DATABASE LAYER ---
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-
-async function executeKv(cmdArray) {
-  if (!KV_URL || !KV_TOKEN) return null;
-  try {
-    const res = await fetch(KV_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${KV_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(cmdArray)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.result;
-    }
-  } catch (e) {
-    console.warn('[Cloud KV]', e.message);
-  }
-  return null;
-}
-
-let kvInitialized = false;
-async function ensureDbLoaded() {
-  if (kvInitialized) return;
-  kvInitialized = true;
-  if (KV_URL && KV_TOKEN) {
-    try {
-      const res = await executeKv(['GET', 'kidsafe_database']);
-      if (res) {
-        const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-        if (parsed && typeof parsed === 'object') {
-          db = Object.assign(db, parsed);
-          console.log('[Cloud KV] Successfully restored state from cloud store.');
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('[Cloud KV] Sync error:', e.message);
-    }
-  }
-
-  // Fallback to initial-data seed if database has no parents yet (e.g. fresh Vercel deploy)
-  if (!db.parents || db.parents.length === 0) {
-    try {
-      const seedFile = path.join(__dirname, 'initial-data.json');
-      if (fs.existsSync(seedFile)) {
-        const seedData = JSON.parse(fs.readFileSync(seedFile, 'utf8'));
-        db = Object.assign(db, seedData);
-        console.log('[Seed] Loaded baseline parent and device pairings from initial-data.json');
-      }
-    } catch (e) {
-      console.warn('[Seed] Warning loading initial-data.json:', e.message);
-    }
-  }
-}
-
-// Load database from disk initially
-try {
-  if (fs.existsSync(dataFile)) {
-    const loaded = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    db = Object.assign(db, loaded);
-  } else {
-    const seedFile = path.join(__dirname, 'initial-data.json');
-    if (fs.existsSync(seedFile)) {
-      const seedData = JSON.parse(fs.readFileSync(seedFile, 'utf8'));
-      db = Object.assign(db, seedData);
-    }
-  }
-  if (!db.parents) db.parents = [];
-  if (!db.children) db.children = [];
-  if (!db.devices) db.devices = [];
-  if (!db.pairingSessions) db.pairingSessions = [];
-  if (!db.reports) db.reports = {};
-  if (!db.limits) db.limits = {};
-  if (!db.alerts) db.alerts = [];
-  if (!db.auditLogs) db.auditLogs = [];
-  if (!db.settings) db.settings = {};
-} catch (e) {
-  console.error('Failed reading database file, using clean DB:', e.message);
-}
-
-async function saveDatabase() {
-  try {
-    const temp = dataFile + '.tmp';
-    fs.writeFileSync(temp, JSON.stringify(db, null, 2), { mode: 0o600 });
-    fs.renameSync(temp, dataFile);
-  } catch (e) {
-    // Disk write error (e.g. read-only filesystem) is non-fatal
-  }
-
-  if (KV_URL && KV_TOKEN) {
-    try {
-      await executeKv(['SET', 'kidsafe_database', JSON.stringify(db)]);
-    } catch (e) {
-      console.warn('[Cloud KV Save Error]:', e.message);
-    }
-  }
-}
-
 // --- CRYPTOGRAPHY & SESSIONS ---
 function equal(a, b) {
-  const aa = Buffer.from(String(a || '')), bb = Buffer.from(String(b || ''));
+  const aa = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
   return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
 }
 
@@ -280,7 +155,7 @@ function createToken(parentId) {
   return `${parentId}.${stamp}.${sig}`;
 }
 
-function verifyToken(token) {
+async function verifyToken(token) {
   if (!token || typeof token !== 'string') return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -289,26 +164,35 @@ function verifyToken(token) {
   if (!Number.isFinite(stamp) || Date.now() - stamp > 30 * DAY_MS) return null; // 30-day session
   const expectedSig = sign(`${parentId}:${stampStr}`);
   if (!equal(sig, expectedSig)) return null;
-  const parent = db.parents.find(p => p.id === parentId);
-  return parent || { id: parentId, name: 'Guardian Parent', phone: '+91 98765 43210' };
+
+  const existing = await dbStore.findParentById(parentId);
+  if (existing) return existing;
+
+  // Token has a valid cryptographic signature; ensure parent row exists in persistent DB
+  return dbStore.ensureParentExists({
+    id: parentId,
+    name: 'Guardian Parent',
+    phone: parentId,
+    displayPhone: parentId,
+    createdAt: stamp
+  });
 }
 
-function getSessionParent(req) {
-  // Check Authorization Bearer header (strictly requires explicit authentication)
+async function getSessionParent(req) {
   const authHeader = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
-  if (authHeader) {
-    if (authHeader === '123456789' || equal(authHeader, PARENT_SECRET)) {
-      return db.parents[0];
-    }
-    const fromToken = verifyToken(authHeader);
-    if (fromToken) return fromToken;
-  }
+  if (!authHeader) return null;
 
-  return null;
+  if (authHeader === '123456789' || equal(authHeader, PARENT_SECRET)) {
+    return dbStore.getFirstParent();
+  }
+  return verifyToken(authHeader);
+}
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
 // --- IN-MEMORY OTP STORE ---
-// phone -> { code, expiresAt, attempts, lastRequestedAt }
 const otpStore = new Map();
 
 function normalizePhone(raw) {
@@ -337,7 +221,6 @@ function broadcastEvent(eventName, payload) {
   }
 }
 
-// Keep-alive heartbeat every 20 seconds
 setInterval(() => {
   const ping = `: heartbeat ${Date.now()}\n\n`;
   for (const client of sseClients) {
@@ -347,15 +230,13 @@ setInterval(() => {
       sseClients.delete(client);
     }
   }
-}, 20000);
+}, 20000).unref();
 
 // --- STANDALONE QR CODE GENERATOR (SVG Data URL) ---
 function generatePairingQrSvg(payloadText) {
-  // Generates clean, crisp SVG QR with standard corner locator targets & data matrix
   const size = 25;
   const matrix = Array.from({ length: size }, () => Array(size).fill(0));
 
-  // Finder pattern helper
   function drawFinder(r, c) {
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j < 7; j++) {
@@ -370,7 +251,6 @@ function generatePairingQrSvg(payloadText) {
   drawFinder(0, size - 7);
   drawFinder(size - 7, 0);
 
-  // Timing patterns
   for (let i = 8; i < size - 8; i++) {
     if (i % 2 === 0) {
       matrix[6][i] = 1;
@@ -378,7 +258,6 @@ function generatePairingQrSvg(payloadText) {
     }
   }
 
-  // Deterministic data hash distribution for visual representation
   const hash = crypto.createHash('sha256').update(payloadText).digest();
   let bitIdx = 0;
   for (let r = 0; r < size; r++) {
@@ -386,7 +265,7 @@ function generatePairingQrSvg(payloadText) {
       const inFinder1 = r < 8 && c < 8;
       const inFinder2 = r < 8 && c >= size - 8;
       const inFinder3 = r >= size - 8 && c < 8;
-      const isTiming = (r === 6 || c === 6);
+      const isTiming = r === 6 || c === 6;
       if (!inFinder1 && !inFinder2 && !inFinder3 && !isTiming) {
         const byte = hash[bitIdx % hash.length];
         const bit = (byte >> (bitIdx % 8)) & 1;
@@ -419,85 +298,9 @@ function generatePairingQrSvg(payloadText) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-// --- RFC 6238 TOTP (GOOGLE AUTHENTICATOR 2FA) & PASSWORD HELPERS ---
-const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-
-function base32Encode(buffer) {
-  let bits = 0;
-  let value = 0;
-  let output = '';
-  for (let i = 0; i < buffer.length; i++) {
-    value = (value << 8) | buffer[i];
-    bits += 8;
-    while (bits >= 5) {
-      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) {
-    output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
-  }
-  return output;
-}
-
-function base32Decode(str) {
-  const clean = String(str || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
-  let bits = 0;
-  let value = 0;
-  const bytes = [];
-  for (let i = 0; i < clean.length; i++) {
-    const val = BASE32_ALPHABET.indexOf(clean[i]);
-    if (val === -1) continue;
-    value = (value << 5) | val;
-    bits += 5;
-    if (bits >= 8) {
-      bytes.push((value >>> (bits - 8)) & 255);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(bytes);
-}
-
-function generateTotpSecret() {
-  return base32Encode(crypto.randomBytes(20));
-}
-
-function computeTotpCode(secretBase32, timeStepOffset = 0) {
-  const key = base32Decode(secretBase32);
-  const timeStep = Math.floor(Date.now() / 1000 / 30) + timeStepOffset;
-  const timeBuffer = Buffer.alloc(8);
-  timeBuffer.writeBigInt64BE(BigInt(timeStep));
-
-  const hmac = crypto.createHmac('sha1', key).update(timeBuffer).digest();
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const binary = ((hmac[offset] & 0x7f) << 24) |
-                 ((hmac[offset + 1] & 0xff) << 16) |
-                 ((hmac[offset + 2] & 0xff) << 8) |
-                 (hmac[offset + 3] & 0xff);
-
-  const otp = binary % 1000000;
-  return String(otp).padStart(6, '0');
-}
-
-function verifyTotpCode(secretBase32, userCode) {
-  const cleanCode = String(userCode || '').trim();
-  if (!cleanCode || cleanCode.length !== 6) return false;
-  for (const offset of [0, -1, 1]) {
-    if (computeTotpCode(secretBase32, offset) === cleanCode) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function hashPassword(password, salt) {
-  return crypto.scryptSync(password, salt, 64).toString('hex');
-}
-
 // --- HTTP REQUEST HELPERS ---
 function read(req) {
   return new Promise((resolve, reject) => {
-    // Handle Vercel / serverless pre-parsed req.body
     if (req.body !== undefined && req.body !== null) {
       if (typeof req.body === 'string') return resolve(req.body);
       if (Buffer.isBuffer(req.body)) return resolve(req.body.toString('utf8'));
@@ -510,7 +313,9 @@ function read(req) {
       if (length > MAX_BYTES) {
         reject(new Error('Payload too large'));
         req.destroy();
-      } else chunks.push(part);
+      } else {
+        chunks.push(part);
+      }
     });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
@@ -533,9 +338,8 @@ function respond(res, status, body, type = 'application/json', extra = {}) {
 // --- HTTP SERVER REQUEST HANDLER ---
 async function requestHandler(req, res) {
   try {
-    await ensureDbLoaded();
+    await dbStore.initRequest();
 
-    // Support both direct URL (local) and Vercel serverless rewritten URL (__url or headers)
     const rawUrl = req.url || '/';
     const url = new URL(rawUrl, `http://${req.headers.host || 'localhost'}`);
     const queryUrl = url.searchParams.get('__url');
@@ -588,7 +392,7 @@ async function requestHandler(req, res) {
         return stream.pipe(res);
       } else {
         const downloadUrl = process.env.APK_DOWNLOAD_URL || 'https://github.com/harish130185-ship-it/kidsafe/raw/main/KidSafe-Monitor.apk';
-        res.writeHead(302, { 'Location': downloadUrl });
+        res.writeHead(302, { Location: downloadUrl });
         return res.end();
       }
     }
@@ -597,22 +401,21 @@ async function requestHandler(req, res) {
     if (req.method === 'GET' && (pathname === '/api/app-version' || pathname === '/api/version')) {
       const versionInfo = {
         ok: true,
-        versionName: process.env.LATEST_APP_VERSION || '1.0.5',
-        versionCode: parseInt(process.env.LATEST_VERSION_CODE || '6', 10),
+        versionName: process.env.LATEST_APP_VERSION || '1.0.6',
+        versionCode: parseInt(process.env.LATEST_VERSION_CODE || '7', 10),
         downloadUrl: '/download/apk',
-        releaseNotes: 'KidSafe Monitor latest update with direct update support and bug fixes',
-        publishedAt: '2026-11-27T15:00:00Z'
+        releaseNotes: 'KidSafe Monitor update with persistent cloud child sync and token reliability fixes',
+        publishedAt: '2026-11-28T10:30:00Z'
       };
       return respond(res, 200, versionInfo);
     }
 
     // 2. Realtime Server-Sent Events (SSE) Stream
     if (req.method === 'GET' && pathname === '/api/stream') {
-      const parent = getSessionParent(req);
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'Access-Control-Allow-Origin': '*'
       });
       res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', serverTime: Date.now() })}\n\n`);
@@ -633,34 +436,30 @@ async function requestHandler(req, res) {
         return respond(res, 400, { error: 'Please enter a valid mobile number with country code (e.g. +91 98765 43210)' });
       }
 
-      // Rate limit check: 60s cooldown
       const existing = otpStore.get(phone);
       if (existing && Date.now() - existing.lastRequestedAt < 60000) {
         const waitSec = Math.ceil((60000 - (Date.now() - existing.lastRequestedAt)) / 1000);
         return respond(res, 429, { error: `Please wait ${waitSec}s before requesting a new OTP` });
       }
 
-      // Generate 6-digit cryptographic OTP
       const code = String(crypto.randomInt(100000, 999999));
       const hash = crypto.createHash('sha256').update(`${phone}:${code}:${PARENT_SECRET}`).digest('hex');
 
       otpStore.set(phone, {
-        code, // kept in memory for development convenience
+        code,
         hash,
-        expiresAt: Date.now() + 5 * 60000, // 5 min TTL
+        expiresAt: Date.now() + 5 * 60000,
         attempts: 0,
         lastRequestedAt: Date.now()
       });
 
-      console.log(`[AUTH-OTP] Generated OTP for ${phone}: ${code}`);
-
-      // Check if real SMS gateway is configured (Fast2SMS or Twilio)
+      const settings = await dbStore.getSettings();
       let realSmsSent = false;
       let smsNotice = '';
-      const f2sKey = (db.settings && db.settings.fast2smsApiKey) || process.env.FAST2SMS_API_KEY;
-      const twilioSid = (db.settings && db.settings.twilioSid) || process.env.TWILIO_ACCOUNT_SID;
-      const twilioToken = (db.settings && db.settings.twilioToken) || process.env.TWILIO_AUTH_TOKEN;
-      const twilioFrom = (db.settings && db.settings.twilioPhoneNumber) || process.env.TWILIO_PHONE_NUMBER;
+      const f2sKey = settings.fast2smsApiKey || process.env.FAST2SMS_API_KEY;
+      const twilioSid = settings.twilioSid || process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = settings.twilioToken || process.env.TWILIO_AUTH_TOKEN;
+      const twilioFrom = settings.twilioPhoneNumber || process.env.TWILIO_PHONE_NUMBER;
 
       if (f2sKey && phone.startsWith('+91')) {
         try {
@@ -668,9 +467,7 @@ async function requestHandler(req, res) {
           await sendFast2Sms(f2sKey, raw10, code);
           realSmsSent = true;
           smsNotice = `Real SMS dispatched to your mobile number ${phone} via Fast2SMS.`;
-          console.log(`[AUTH-OTP] Real SMS delivered to ${phone} via Fast2SMS`);
         } catch (smsErr) {
-          console.error('[AUTH-OTP] Fast2SMS dispatch failed:', smsErr.message);
           smsNotice = `SMS delivery issue: ${smsErr.message}. Development OTP provided below.`;
         }
       } else if (twilioSid && twilioToken && twilioFrom) {
@@ -678,9 +475,7 @@ async function requestHandler(req, res) {
           await sendTwilioSms(twilioSid, twilioToken, twilioFrom, phone, code);
           realSmsSent = true;
           smsNotice = `Real SMS dispatched to your mobile number ${phone} via Twilio.`;
-          console.log(`[AUTH-OTP] Real SMS delivered to ${phone} via Twilio`);
         } catch (smsErr) {
-          console.error('[AUTH-OTP] Twilio dispatch failed:', smsErr.message);
           smsNotice = `SMS delivery issue: ${smsErr.message}. Development OTP provided below.`;
         }
       } else {
@@ -693,7 +488,6 @@ async function requestHandler(req, res) {
         phone,
         cooldownSeconds: 60,
         realSmsSent,
-        // Only return devOtp if real SMS gateway is not configured or failed
         devOtp: realSmsSent ? undefined : code
       });
     }
@@ -727,42 +521,37 @@ async function requestHandler(req, res) {
         }
       }
 
-      // OTP verified: find or create parent user
-      let parent = db.parents.find(p => p.phone === phone);
+      let parent = await dbStore.findParentByPhone(phone);
       if (!parent) {
-        parent = {
+        parent = await dbStore.upsertParent({
           id: `parent-${Date.now()}`,
           phone,
           displayPhone: phone.replace(/(\+\d{2})(\d{5})(\d{5})/, '$1 $2 $3'),
           name: 'Parent Guardian',
           language: 'en',
           theme: 'light',
+          authProvider: 'otp',
           createdAt: Date.now()
-        };
-        db.parents.push(parent);
-        await saveDatabase();
+        });
       }
 
       otpStore.delete(phone);
-
       const token = createToken(parent.id);
-      const stamp = String(Date.now());
 
-      db.auditLogs.unshift({
+      await dbStore.addAuditLog({
         id: `audit-${Date.now()}`,
         type: 'parent_login',
         title: 'Parent Signed In',
         details: `Signed in via mobile OTP: ${phone}`,
         timestamp: Date.now()
       });
-      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
-        parent,
+        parent: sanitizeParent(parent),
         token
       }, 'application/json', {
-        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000` // 30 days
+        'Set-Cookie': `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
       });
     }
 
@@ -774,14 +563,12 @@ async function requestHandler(req, res) {
       let picture = '';
       let googleSub = '';
 
-      // Check if real Google ID Token credential was sent from Google Identity Services
       if (body.credential) {
         try {
-          // Google ID token is a standard JWT: header.payload.signature
           const parts = body.credential.split('.');
           if (parts.length === 3) {
             const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-            email = payload.email || '';
+            email = String(payload.email || '').trim().toLowerCase();
             name = payload.name || payload.given_name || 'Google Parent';
             picture = payload.picture || '';
             googleSub = payload.sub || '';
@@ -800,10 +587,9 @@ async function requestHandler(req, res) {
         return respond(res, 400, { error: 'A valid Google email address is required.' });
       }
 
-      // Find or create parent account by email or googleSub
-      let parent = db.parents.find(p => p.email === email || (googleSub && p.googleId === googleSub));
+      let parent = await dbStore.findParentByGoogle(email, googleSub);
       if (!parent) {
-        parent = {
+        parent = await dbStore.upsertParent({
           id: `parent-google-${Date.now()}`,
           googleId: googleSub,
           email,
@@ -815,35 +601,35 @@ async function requestHandler(req, res) {
           theme: 'light',
           authProvider: 'google',
           createdAt: Date.now()
-        };
-        db.parents.push(parent);
+        });
       } else {
-        if (name) parent.name = name;
-        if (picture) parent.picture = picture;
+        parent = await dbStore.upsertParent({
+          ...parent,
+          name: name || parent.name,
+          picture: picture || parent.picture
+        });
       }
-      await saveDatabase();
 
       const token = createToken(parent.id);
-
-      db.auditLogs.unshift({
+      await dbStore.addAuditLog({
         id: `audit-${Date.now()}`,
         type: 'parent_google_login',
         title: 'Parent Signed In via Google',
         details: `Verified Google account: ${email} (${name})`,
         timestamp: Date.now()
       });
-      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
-        parent,
+        parent: sanitizeParent(parent),
         token
       });
     }
 
     // 4c. AUTHENTICATION: Get Google Auth Configuration
     if (req.method === 'GET' && pathname === '/api/auth/google-config') {
-      const gClientId = (db.settings && db.settings.googleClientId) || process.env.GOOGLE_CLIENT_ID || '';
+      const settings = await dbStore.getSettings();
+      const gClientId = settings.googleClientId || process.env.GOOGLE_CLIENT_ID || '';
       return respond(res, 200, {
         googleClientId: gClientId,
         isConfigured: !!gClientId
@@ -864,8 +650,7 @@ async function requestHandler(req, res) {
         return respond(res, 400, { error: 'Password must be at least 6 characters long.' });
       }
 
-      // Check if email already registered
-      const existing = db.parents.find(p => p.email && p.email.toLowerCase() === email);
+      const existing = await dbStore.findParentByEmail(email);
       if (existing) {
         return respond(res, 400, { error: 'An account with this email already exists. Please sign in.' });
       }
@@ -873,7 +658,7 @@ async function requestHandler(req, res) {
       const salt = crypto.randomBytes(16).toString('hex');
       const passwordHash = hashPassword(password, salt);
 
-      const parent = {
+      const parent = await dbStore.upsertParent({
         id: `parent-${Date.now()}`,
         email,
         phone: email,
@@ -885,23 +670,20 @@ async function requestHandler(req, res) {
         salt,
         passwordHash,
         createdAt: Date.now()
-      };
-      db.parents.push(parent);
-      await saveDatabase();
+      });
 
       const token = createToken(parent.id);
-      db.auditLogs.unshift({
+      await dbStore.addAuditLog({
         id: `audit-${Date.now()}`,
         type: 'parent_registered',
         title: 'New Parent Account Created',
         details: `Account registered for ${email}.`,
         timestamp: Date.now()
       });
-      await saveDatabase();
 
       return respond(res, 201, {
         ok: true,
-        parent,
+        parent: sanitizeParent(parent),
         token,
         message: 'Account created successfully! Welcome to KidSafe.'
       });
@@ -917,16 +699,15 @@ async function requestHandler(req, res) {
         return respond(res, 400, { error: 'Email and password are required.' });
       }
 
-      const parent = db.parents.find(p => (p.email && p.email.toLowerCase() === email) || (p.phone && p.phone === email));
+      let parent = await dbStore.findParentByEmail(email);
       if (!parent) {
         return respond(res, 404, { error: 'No account found with this email. Please click "Create Account" first.' });
       }
 
       if (!parent.passwordHash || !parent.salt) {
-        // First-time password set for legacy parent
-        parent.salt = crypto.randomBytes(16).toString('hex');
-        parent.passwordHash = hashPassword(password, parent.salt);
-        await saveDatabase();
+        const salt = crypto.randomBytes(16).toString('hex');
+        const passwordHash = hashPassword(password, salt);
+        parent = await dbStore.upsertParent({ ...parent, salt, passwordHash });
       } else {
         const computedHash = hashPassword(password, parent.salt);
         if (!equal(computedHash, parent.passwordHash)) {
@@ -935,18 +716,17 @@ async function requestHandler(req, res) {
       }
 
       const token = createToken(parent.id);
-      db.auditLogs.unshift({
+      await dbStore.addAuditLog({
         id: `audit-${Date.now()}`,
         type: 'parent_login',
         title: 'Parent Signed In',
         details: `Password verified for ${email}.`,
         timestamp: Date.now()
       });
-      await saveDatabase();
 
       return respond(res, 200, {
         ok: true,
-        parent,
+        parent: sanitizeParent(parent),
         token,
         message: 'Signed in successfully!'
       });
@@ -954,11 +734,11 @@ async function requestHandler(req, res) {
 
     // 5. AUTHENTICATION: Check Current Session (Me)
     if (req.method === 'GET' && pathname === '/api/auth/me') {
-      const parent = getSessionParent(req);
+      const parent = await getSessionParent(req);
       if (!parent) {
         return respond(res, 401, { error: 'Not authenticated' });
       }
-      return respond(res, 200, { ok: true, parent });
+      return respond(res, 200, { ok: true, parent: sanitizeParent(parent) });
     }
 
     // 6. AUTHENTICATION: Logout
@@ -975,49 +755,49 @@ async function requestHandler(req, res) {
       if (!valid) {
         return respond(res, 401, { error: 'Invalid parent access key' });
       }
-      const parent = db.parents[0] || { id: 'parent-admin', name: 'Guardian Parent', phone: '+91 98765 43210' };
+      const parent = (await dbStore.getFirstParent()) || { id: 'parent-admin', name: 'Guardian Parent', phone: '+91 98765 43210' };
       const token = createToken(parent.id);
-      return respond(res, 200, { ok: true, parent, token });
+      return respond(res, 200, { ok: true, parent: sanitizeParent(parent), token });
     }
 
     // 8. PAIRING: Generate 6-digit Device Pairing Code & QR
     if (req.method === 'POST' && pathname === '/api/pairing/generate') {
-      const parent = getSessionParent(req);
+      const parent = await getSessionParent(req);
       if (!parent) return respond(res, 401, { error: 'Please sign in as parent' });
 
       const body = JSON.parse(await read(req));
       let childId = body.childId;
-      let child = db.children.find(c => c.id === childId);
+      let child = childId ? await dbStore.getChildById(childId) : null;
+      if (child && child.parentId !== parent.id) {
+        return respond(res, 403, { error: 'Access denied for this child profile' });
+      }
 
-      // Allow creating child profile on the fly if name provided
       if (!child && body.childName) {
-        child = {
+        const cleanName = String(body.childName).trim();
+        child = await dbStore.upsertChild({
           id: `child-${Date.now()}`,
           parentId: parent.id,
-          name: body.childName.trim(),
+          name: cleanName,
           age: Number(body.childAge) || 10,
-          avatar: body.childName.toLowerCase().replace(/[^a-z]/g, '') || 'default',
+          avatar: cleanName.toLowerCase().replace(/[^a-z]/g, '') || 'default',
           deviceName: 'Pending Setup',
           deviceModel: 'Android Device',
           batteryLevel: null,
           isOnline: false,
           lastSyncAt: 0,
-          dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120
-        };
-        db.children.push(child);
-        db.limits[child.id] = [];
+          dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120,
+          createdAt: Date.now()
+        });
         childId = child.id;
       }
 
       if (!child) return respond(res, 400, { error: 'Child profile is required' });
 
-      // Generate clean 6-digit pairing code (e.g. "KS-4829")
       const numPart = crypto.randomInt(1000, 9999);
       const code = `KS-${numPart}`;
-      const expiresAt = Date.now() + 10 * 60000; // 10 minutes expiry
+      const expiresAt = Date.now() + 10 * 60000;
 
-      // Invalidate any existing unused pairing session for this child
-      db.pairingSessions = db.pairingSessions.filter(s => !(s.childId === childId && s.status === 'pending'));
+      await dbStore.invalidatePendingPairingForChild(childId);
 
       const session = {
         id: `pair-${Date.now()}`,
@@ -1030,15 +810,14 @@ async function requestHandler(req, res) {
         status: 'pending',
         createdAt: Date.now()
       };
-      db.pairingSessions.push(session);
-      await saveDatabase();
+      await dbStore.createPairingSession(session);
 
-      // Host for QR code and pairing connection (auto-detects https / proxy)
-      const proto = req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http');
+      const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
       const hostUrl = `${proto}://${req.headers.host || 'localhost:8080'}`;
       const qrPayload = JSON.stringify({ code, url: hostUrl, childName: child.name });
       const qrDataUrl = generatePairingQrSvg(qrPayload);
 
+      const availableChildren = await dbStore.getChildrenByParent(parent.id);
       return respond(res, 200, {
         ok: true,
         pairingCode: code,
@@ -1047,7 +826,7 @@ async function requestHandler(req, res) {
         childId,
         childName: child.name,
         child,
-        availableChildren: db.children.filter(c => c.parentId === parent.id),
+        availableChildren,
         hostUrl
       });
     }
@@ -1062,28 +841,23 @@ async function requestHandler(req, res) {
       }
 
       const cleanCode = code.replace(/[^A-Z0-9]/gi, '');
-      const session = db.pairingSessions.find(s => {
-        const cleanS = String(s.code || '').replace(/[^A-Z0-9]/gi, '');
-        return cleanS === cleanCode && s.status === 'pending';
-      });
+      const session = await dbStore.findPendingPairingByCleanCode(cleanCode);
       if (!session) {
         return respond(res, 404, { error: 'Invalid or already used pairing code.' });
       }
 
       if (Date.now() > session.expiresAt) {
         session.status = 'expired';
-        await saveDatabase();
+        await dbStore.updatePairingSession(session);
         return respond(res, 400, { error: 'This pairing code has expired. Please generate a new one on the parent dashboard.' });
       }
 
-      // Generate unique, cryptographically random revocable device credential
       const deviceToken = crypto.randomBytes(32).toString('hex');
       const deviceId = `dev-${Date.now()}`;
-
       const parsedBattery = Number(body.batteryLevel);
       const initialBattery = (!isNaN(parsedBattery) && parsedBattery > 0 && parsedBattery <= 100) ? parsedBattery : null;
 
-      const newDevice = {
+      const newDevice = await dbStore.upsertDevice({
         id: deviceId,
         childId: session.childId,
         parentId: session.parentId,
@@ -1095,30 +869,28 @@ async function requestHandler(req, res) {
         pairedAt: Date.now(),
         lastSyncAt: Date.now(),
         batteryLevel: initialBattery,
+        isOnline: true,
         isRevoked: false
-      };
+      });
 
-      db.devices.push(newDevice);
-
-      // Update child record
-      const child = db.children.find(c => c.id === session.childId);
+      const child = await dbStore.getChildById(session.childId);
       if (child) {
-        child.deviceName = newDevice.deviceName;
-        child.deviceModel = newDevice.deviceModel;
-        child.isOnline = true;
-        child.lastSyncAt = Date.now();
-        if (initialBattery !== null) {
-          child.batteryLevel = initialBattery;
-        }
+        await dbStore.upsertChild({
+          ...child,
+          deviceName: newDevice.deviceName,
+          deviceModel: newDevice.deviceModel,
+          isOnline: true,
+          lastSyncAt: Date.now(),
+          batteryLevel: initialBattery !== null ? initialBattery : child.batteryLevel
+        });
       }
 
-      // Mark pairing session consumed
       session.status = 'consumed';
       session.consumedAt = Date.now();
       session.deviceId = deviceId;
+      await dbStore.updatePairingSession(session);
 
-      // Add audit log
-      db.auditLogs.unshift({
+      await dbStore.addAuditLog({
         id: `audit-${Date.now()}`,
         type: 'device_paired',
         title: 'New Device Paired',
@@ -1126,13 +898,10 @@ async function requestHandler(req, res) {
         timestamp: Date.now()
       });
 
-      await saveDatabase();
-
-      // Broadcast real-time event to parent dashboard!
       broadcastEvent('device_paired', {
         childId: session.childId,
         childName: session.childName,
-        device: newDevice
+        device: { id: newDevice.id, childId: newDevice.childId, deviceName: newDevice.deviceName, deviceModel: newDevice.deviceModel }
       });
 
       return respond(res, 200, {
@@ -1147,31 +916,31 @@ async function requestHandler(req, res) {
 
     // 10. DEVICES: List Paired Devices
     if (req.method === 'GET' && pathname === '/api/devices') {
-      const parent = getSessionParent(req);
+      const parent = await getSessionParent(req);
       if (!parent) return respond(res, 401, { error: 'Unauthorized' });
 
-      const devices = db.devices.filter(d => !d.isRevoked && d.parentId === parent.id).map(d => {
-        const child = db.children.find(c => c.id === d.childId);
-        return {
-          id: d.id,
-          childId: d.childId,
-          childName: child?.name || 'Child',
-          deviceName: d.deviceName,
-          deviceModel: d.deviceModel,
-          androidVersion: d.androidVersion,
-          batteryLevel: d.batteryLevel,
-          lastSyncAt: d.lastSyncAt,
-          pairedAt: d.pairedAt,
-          isOnline: Date.now() - (d.lastSyncAt || 0) < 20 * 60000
-        };
-      });
+      const rawDevices = await dbStore.getDevicesByParent(parent.id);
+      const devices = rawDevices.map(d => ({
+        id: d.id,
+        childId: d.childId,
+        childName: d.childName || 'Child',
+        deviceName: d.deviceName,
+        deviceModel: d.deviceModel,
+        androidVersion: d.androidVersion,
+        batteryLevel: d.batteryLevel,
+        lastSyncAt: d.lastSyncAt,
+        lastSync: d.lastSyncAt,
+        pairedAt: d.pairedAt,
+        tokenLast6: d.token ? d.token.slice(-6) : 'sec789',
+        isOnline: Date.now() - (d.lastSyncAt || 0) < 20 * 60000
+      }));
 
       return respond(res, 200, { ok: true, devices });
     }
 
     // 11. DEVICES: Revoke Device Access
     if ((req.method === 'POST' && pathname === '/api/devices/revoke') || (req.method === 'DELETE' && pathname.startsWith('/api/devices/'))) {
-      const parent = getSessionParent(req);
+      const parent = await getSessionParent(req);
       if (!parent) return respond(res, 401, { error: 'Unauthorized' });
 
       let deviceId = '';
@@ -1182,526 +951,29 @@ async function requestHandler(req, res) {
         deviceId = body.deviceId;
       }
 
-      const device = db.devices.find(d => d.id === deviceId);
-      if (!device) return respond(res, 404, { error: 'Device not found' });
+      const existing = await dbStore.getDeviceById(deviceId);
+      if (!existing) return respond(res, 404, { error: 'Device not found' });
+      const child = await dbStore.getChildById(existing.childId);
+      if (existing.parentId && existing.parentId !== parent.id && child?.parentId !== parent.id) {
+        return respond(res, 403, { error: 'Unauthorized' });
+      }
 
-      device.isRevoked = true;
-      await saveDatabase();
-
+      const device = await dbStore.revokeDevice(deviceId);
       broadcastEvent('device_revoked', { deviceId: device.id, childId: device.childId });
       return respond(res, 200, { ok: true, message: 'Device access revoked' });
     }
 
-    // 12. PROTECTED PARENT MIDDLEWARE (for remaining routes)
-    const isPublicUpload = pathname.startsWith('/api/upload');
-    const parentUser = getSessionParent(req);
+    // 12. UPLOAD & DEVICE-AUTH ROUTES
+    if (pathname === '/api/upload') {
+      if (req.method !== 'POST') return respond(res, 405, { error: 'Method not allowed' });
 
-    if (!isPublicUpload && !parentUser) {
-      return respond(res, 401, { error: 'Please sign in to access parent dashboard' });
-    }
-
-    // 13. GET /api/children: List all children
-    if (req.method === 'GET' && pathname === '/api/children') {
-      return respond(res, 200, { children: db.children });
-    }
-
-    // 14. POST /api/children: Add child profile
-    if (req.method === 'POST' && pathname === '/api/children') {
-      const body = JSON.parse(await read(req));
-      if (!body.name) return respond(res, 400, { error: 'Child name is required' });
-      const newChild = {
-        id: body.id || `child-${Date.now()}`,
-        parentId: parentUser.id,
-        name: String(body.name).trim(),
-        age: Number(body.age) || 10,
-        avatar: body.avatar || String(body.name).toLowerCase().replace(/[^a-z]/g, ''),
-        deviceName: body.deviceName || 'Pending Setup',
-        deviceModel: body.deviceModel || 'Android Device',
-        batteryLevel: 100,
-        isOnline: false,
-        lastSyncAt: Date.now(),
-        dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120
-      };
-      // Check if child already exists by ID
-      const existingIdx = db.children.findIndex(c => c.id === newChild.id);
-      if (existingIdx !== -1) {
-        db.children[existingIdx] = Object.assign(db.children[existingIdx], newChild);
-      } else {
-        db.children.push(newChild);
-      }
-      if (!db.limits[newChild.id]) db.limits[newChild.id] = [];
-      await saveDatabase();
-      broadcastEvent('child_added', { child: newChild });
-      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
-      return respond(res, 201, { ok: true, child: newChild, availableChildren: parentChildren });
-    }
-
-    // 14b. POST /api/children/delete or DELETE /api/children: Remove child profile
-    if ((req.method === 'POST' && pathname === '/api/children/delete') || (req.method === 'DELETE' && (pathname === '/api/children' || pathname.startsWith('/api/children/')))) {
-      let childId = url.searchParams.get('childId');
-      if (!childId && req.method === 'POST') {
-        try {
-          const body = JSON.parse(await read(req));
-          childId = body.childId;
-        } catch {}
-      }
-      if (!childId && pathname.startsWith('/api/children/')) {
-        childId = pathname.slice('/api/children/'.length);
-      }
-
-      if (!childId) return respond(res, 400, { error: 'Child profile ID is required' });
-
-      const idx = db.children.findIndex(c => c.id === childId && c.parentId === parentUser.id);
-      if (idx === -1) return respond(res, 404, { error: 'Child profile not found' });
-
-      const removed = db.children.splice(idx, 1)[0];
-
-      // Clean up all associated child data
-      delete db.reports[childId];
-      delete db.limits[childId];
-      db.alerts = (db.alerts || []).filter(a => a.childId !== childId);
-      db.pairingSessions = (db.pairingSessions || []).filter(s => s.childId !== childId);
-      db.devices = (db.devices || []).filter(d => d.childId !== childId);
-
-      await saveDatabase();
-      broadcastEvent('child_deleted', { childId, childName: removed.name });
-
-      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
-      return respond(res, 200, { ok: true, message: `Child profile ${removed.name} removed successfully`, childId, availableChildren: parentChildren });
-    }
-
-    // 14c. POST /api/children/sync: Restore / sync children across distributed serverless instances
-    if (req.method === 'POST' && pathname === '/api/children/sync') {
-      const body = JSON.parse(await read(req));
-      const incomingChildren = Array.isArray(body.children) ? body.children : [];
-      let updated = false;
-
-      for (const inc of incomingChildren) {
-        if (!inc || !inc.name) continue;
-        const incId = inc.id || `child-${Date.now()}`;
-        const existing = db.children.find(c => c.id === incId);
-        if (!existing) {
-          db.children.push({
-            id: incId,
-            parentId: parentUser.id,
-            name: String(inc.name).trim(),
-            age: Number(inc.age) || 10,
-            avatar: inc.avatar || String(inc.name).toLowerCase().replace(/[^a-z]/g, ''),
-            deviceName: inc.deviceName || 'Pending Setup',
-            deviceModel: inc.deviceModel || 'Android Device',
-            batteryLevel: inc.batteryLevel || 100,
-            isOnline: !!inc.isOnline,
-            lastSyncAt: inc.lastSyncAt || Date.now(),
-            dailyLimitMinutes: Number(inc.dailyLimitMinutes) || 120
-          });
-          if (!db.limits[incId]) db.limits[incId] = [];
-          updated = true;
-        }
-      }
-
-      if (updated) {
-        await saveDatabase();
-      }
-
-      const parentChildren = db.children.filter(c => c.parentId === parentUser.id);
-      return respond(res, 200, { ok: true, children: parentChildren });
-    }
-
-    // 15. GET /api/dashboard: Complete Dashboard with Freshness Indicators
-    if (req.method === 'GET' && pathname === '/api/dashboard') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized. Please sign in.' });
-
-      // STRICT DATA ISOLATION: Only fetch children belonging to this authenticated parent!
-      const parentChildren = db.children.filter(c => c.parentId === parent.id);
-      const requestedChildId = url.searchParams.get('childId');
-      const child = parentChildren.find(c => c.id === requestedChildId) || parentChildren[0] || null;
-
-      if (!child) {
-        // Parent has no children yet! Return clean empty state
-        return respond(res, 200, {
-          parent,
-          child: null,
-          availableChildren: [],
-          currentDate: new Date().toISOString().slice(0, 10),
-          summary: {
-            todayScreenTimeMs: 0,
-            yesterdayScreenTimeMs: 0,
-            totalScreenTimeMs: 0,
-            unlocksCount: 0,
-            screenUnlocksApprox: 0,
-            totalAppsUsed: 0,
-            dailyLimitMinutes: 120,
-            limitMinutes: 120,
-            remainingMinutes: 120,
-            isExceeded: false,
-            comparisonVsYesterday: 0,
-            syncStatus: 'offline',
-            freshness: 'no_device',
-            syncHealth: 'empty',
-            lastSyncFormatted: 'Never'
-          },
-          charts: {
-            hourlyActivity: Array(24).fill(0).map((_, idx) => ({ hour: idx, label: `${idx % 12 === 0 ? 12 : idx % 12} ${idx < 12 ? 'AM' : 'PM'}`, minutes: 0 })),
-            sevenDayTrend: [],
-            categoryDistribution: [],
-            categoryBreakdown: {}
-          },
-          mostUsedApps: [],
-          timeline: [],
-          alerts: [],
-          limits: []
-        });
-      }
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const yesterdayStr = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
-
-      const childReports = db.reports[child.id] || {};
-
-      // Look for the most recently populated report if today has no data yet (e.g. device locked / idle)
-      const allReportKeys = Object.keys(childReports).sort().reverse();
-      const latestReportKey = allReportKeys.find(k => childReports[k] && (childReports[k].totalScreenTimeMs > 0 || (childReports[k].apps && childReports[k].apps.length > 0)));
-      const latestReport = latestReportKey ? childReports[latestReportKey] : null;
-
-      let isPreservedUsage = false;
-      let activeReport = childReports[todayStr];
-
-      if (!activeReport || (!activeReport.totalScreenTimeMs && (!activeReport.apps || activeReport.apps.length === 0))) {
-        if (latestReport) {
-          activeReport = latestReport;
-          isPreservedUsage = true;
-        }
-      }
-
-      const todayReport = activeReport || {
-        totalScreenTimeMs: 0,
-        screenUnlocksApprox: 0,
-        apps: [],
-        timeline: [],
-        hourlyActivity: Array(24).fill(0),
-        categoryBreakdown: { Education: 0, Entertainment: 0, Games: 0, Social: 0, Productivity: 0, System: 0, Other: 0 }
-      };
-      const yesterdayReport = childReports[yesterdayStr] || { totalScreenTimeMs: 0 };
-
-      // Compute 7-day trend
-      const sevenDayTrend = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.now() - i * DAY_MS);
-        const dayKey = d.toISOString().slice(0, 10);
-        const rep = childReports[dayKey];
-        const minutes = rep ? Math.round(rep.totalScreenTimeMs / 60000) : 0;
-        sevenDayTrend.push({
-          day: dayKey,
-          label: d.toLocaleDateString('en-US', { weekday: 'short' }),
-          minutes,
-          limit: child.dailyLimitMinutes
-        });
-      }
-
-      // Hourly breakdown
-      const hourlyActivity = (todayReport.hourlyActivity || Array(24).fill(0)).map((mins, idx) => {
-        const hr = idx % 12 === 0 ? 12 : idx % 12;
-        const ampm = idx < 12 ? 'AM' : 'PM';
-        return { hour: idx, label: `${hr} ${ampm}`, minutes: mins };
-      });
-
-      // Category breakdown
-      const categoryColors = {
-        Education: '#10B981',
-        Entertainment: '#F59E0B',
-        Games: '#EC4899',
-        Social: '#8B5CF6',
-        Productivity: '#3B82F6',
-        System: '#64748B',
-        Other: '#94A3B8'
-      };
-      const catTotals = todayReport.categoryBreakdown || {};
-      const totalMins = Math.max(1, Math.round(todayReport.totalScreenTimeMs / 60000));
-      const categoryDistribution = Object.keys(catTotals).map(cat => ({
-        category: cat,
-        minutes: catTotals[cat] || 0,
-        percentage: Math.round(((catTotals[cat] || 0) / totalMins) * 100),
-        color: categoryColors[cat] || '#6366F1'
-      })).sort((a, b) => b.minutes - a.minutes);
-
-      // Limit Status
-      const todayMinutes = Math.round(todayReport.totalScreenTimeMs / 60000);
-      let limitStatus = 'within_limit';
-      if (todayMinutes >= child.dailyLimitMinutes) limitStatus = 'exceeded';
-      else if (todayMinutes >= child.dailyLimitMinutes * 0.85) limitStatus = 'approaching_limit';
-
-      // Honest Freshness & Sync Status
-      const timeSinceSync = Date.now() - (child.lastSyncAt || 0);
-      let syncStatus = 'synced';
-      let freshness = 'live';
-
-      if (timeSinceSync < 60000) {
-        freshness = 'live';
-        syncStatus = 'synced';
-      } else if (timeSinceSync < 15 * 60000) {
-        freshness = 'fresh';
-        syncStatus = 'synced';
-      } else if (timeSinceSync < 60 * 60000) {
-        freshness = 'delayed';
-        syncStatus = 'delayed';
-      } else {
-        freshness = 'offline';
-        syncStatus = 'offline';
-      }
-
-      const minutesAgo = Math.max(0, Math.round(timeSinceSync / 60000));
-      const lastSyncFormatted = minutesAgo === 0 ? 'Just now' : `${minutesAgo}m ago`;
-
-      return respond(res, 200, {
-        child,
-        parent,
-        availableChildren: parentChildren,
-        currentDate: todayStr,
-        summary: {
-          todayScreenTimeMs: todayReport.totalScreenTimeMs,
-          totalScreenTimeMs: todayReport.totalScreenTimeMs,
-          yesterdayScreenTimeMs: yesterdayReport.totalScreenTimeMs,
-          unlocksCount: todayReport.screenUnlocksApprox,
-          screenUnlocksApprox: todayReport.screenUnlocksApprox,
-          totalAppsUsed: todayReport.apps?.length || 0,
-          dailyLimitMinutes: child.dailyLimitMinutes,
-          limitMinutes: child.dailyLimitMinutes,
-          remainingMinutes: child.dailyLimitMinutes - todayMinutes,
-          isExceeded: todayMinutes > child.dailyLimitMinutes,
-          comparisonVsYesterday: yesterdayReport.totalScreenTimeMs > 0 ? Math.round(((todayReport.totalScreenTimeMs - yesterdayReport.totalScreenTimeMs) / yesterdayReport.totalScreenTimeMs) * 100) : 0,
-          limitStatus,
-          syncStatus,
-          freshness,
-          syncHealth: freshness,
-          lastSyncTimestamp: child.lastSyncAt,
-          lastSyncFormatted,
-          isPreservedUsage,
-          lastReportDay: todayReport.day || todayStr
-        },
-        charts: {
-          hourlyActivity,
-          sevenDayTrend,
-          categoryDistribution,
-          categoryBreakdown: catTotals
-        },
-        mostUsedApps: (todayReport.apps || []).slice(0, 8),
-        timeline: (todayReport.timeline || []).slice(0, 20),
-        alerts: db.alerts.filter(a => a.childId === child.id),
-        limits: db.limits[child.id] || []
-      });
-    }
-
-    // 16. GET /api/timeline: Activity Timeline Filter
-    if (req.method === 'GET' && pathname === '/api/timeline') {
-      const childId = url.searchParams.get('childId') || db.children[0]?.id;
-      const filter = url.searchParams.get('filter') || 'today';
-      const customDate = url.searchParams.get('date');
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const yesterdayStr = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
-
-      const childReports = db.reports[childId] || {};
-      let events = [];
-
-      if (filter === 'today') {
-        events = childReports[todayStr]?.timeline || [];
-      } else if (filter === 'yesterday') {
-        events = childReports[yesterdayStr]?.timeline || [];
-      } else if (filter === 'custom' && customDate) {
-        events = childReports[customDate]?.timeline || [];
-      } else if (filter === 'week') {
-        for (let i = 0; i < 7; i++) {
-          const dStr = new Date(Date.now() - i * DAY_MS).toISOString().slice(0, 10);
-          if (childReports[dStr]?.timeline) {
-            events.push(...childReports[dStr].timeline);
-          }
-        }
-      }
-
-      events.sort((a, b) => b.time - a.time);
-      return respond(res, 200, { childId, filter, count: events.length, events });
-    }
-
-    // 17. GET /api/limits & POST /api/limits: App Limits
-    if (req.method === 'GET' && pathname === '/api/limits') {
-      const childId = url.searchParams.get('childId') || db.children[0]?.id;
-      return respond(res, 200, { limits: db.limits[childId] || [] });
-    }
-
-    if (req.method === 'POST' && pathname === '/api/limits') {
-      const body = JSON.parse(await read(req));
-      const { childId, package: pkg, name, category, dailyLimitMinutes, isBlocked } = body;
-      if (!childId || !pkg) return respond(res, 400, { error: 'childId and package are required' });
-
-      if (!db.limits[childId]) db.limits[childId] = [];
-      const existing = db.limits[childId].find(l => l.package === pkg);
-      if (existing) {
-        if (dailyLimitMinutes !== undefined) existing.dailyLimitMinutes = Number(dailyLimitMinutes);
-        if (isBlocked !== undefined) existing.isBlocked = Boolean(isBlocked);
-      } else {
-        db.limits[childId].push({
-          package: pkg,
-          name: name || categorize(pkg).name,
-          category: category || categorize(pkg).category,
-          dailyLimitMinutes: Number(dailyLimitMinutes) || 30,
-          isBlocked: Boolean(isBlocked)
-        });
-      }
-      await saveDatabase();
-      broadcastEvent('limits_updated', { childId, limits: db.limits[childId] });
-      return respond(res, 200, { ok: true, limits: db.limits[childId] });
-    }
-
-    // 18. POST /api/alerts/mark-read
-    if (req.method === 'POST' && pathname === '/api/alerts/mark-read') {
-      const body = JSON.parse(await read(req));
-      const alert = db.alerts.find(a => a.id === body.alertId);
-      if (alert) alert.isRead = true;
-      await saveDatabase();
-      broadcastEvent('alert_read', { alertId: body.alertId });
-      return respond(res, 200, { ok: true });
-    }
-
-    // 19. EXPORTS: GET /api/export/csv & /api/reports/export
-    if (req.method === 'GET' && (pathname === '/api/export/csv' || (pathname === '/api/reports/export' && (url.searchParams.get('format') === 'csv' || !url.searchParams.get('format'))))) {
-      const childId = url.searchParams.get('childId') || db.children[0]?.id;
-      const day = url.searchParams.get('day') || new Date().toISOString().slice(0, 10);
-      const child = db.children.find(c => c.id === childId) || { name: 'Child', deviceName: 'Android' };
-      const childReports = db.reports[childId] || {};
-      const report = childReports[day] || Object.values(childReports)[0] || { apps: [] };
-
-      let csv = `Date,Child Name,Device,App Name,Package,Category,Duration (Minutes),Duration (Formatted)\n`;
-      for (const app of report.apps || []) {
-        const mins = Math.round((app.durationMs || 0) / 60000);
-        const hrs = Math.floor(mins / 60);
-        const remMins = mins % 60;
-        const fmt = hrs > 0 ? `${hrs}h ${remMins}m` : `${remMins}m`;
-        csv += `"${day}","${child.name}","${child.deviceName || 'Android'}","${app.name}","${app.package}","${app.category || 'General'}",${mins},"${fmt}"\n`;
-      }
-
-      res.writeHead(200, {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="kidsafe-report-${(child.name || 'child').toLowerCase()}-${day}.csv"`
-      });
-      return res.end(csv);
-    }
-
-    // 20. EXPORTS: GET /api/export/json & /api/reports/export?format=json
-    if (req.method === 'GET' && (pathname === '/api/export/json' || (pathname === '/api/reports/export' && url.searchParams.get('format') === 'json'))) {
-      const childId = url.searchParams.get('childId') || db.children[0]?.id;
-      const child = db.children.find(c => c.id === childId) || { name: 'Child' };
-      const reports = db.reports[childId] || {};
-
-      res.writeHead(200, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="kidsafe-export-${(child.name || 'child').toLowerCase()}.json"`
-      });
-      return res.end(JSON.stringify({ ok: true, child, exportTimestamp: Date.now(), daysCount: Object.keys(reports).length, reports }, null, 2));
-    }
-
-    // 21. SETTINGS: Update Retention Policy
-    if (req.method === 'POST' && pathname === '/api/settings/retention') {
-      const body = JSON.parse(await read(req));
-      const days = Number(body.days || body.retentionDays) || 30;
-      db.settings.dataRetentionDays = days;
-      await saveDatabase();
-      return respond(res, 200, { ok: true, dataRetentionDays: days });
-    }
-
-    // 21b. SETTINGS: SMS Gateway Configuration
-    if (req.method === 'GET' && pathname === '/api/settings/sms-gateway') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
-      const f2s = (db.settings && db.settings.fast2smsApiKey) || process.env.FAST2SMS_API_KEY || '';
-      const twSid = (db.settings && db.settings.twilioSid) || process.env.TWILIO_ACCOUNT_SID || '';
-      return respond(res, 200, {
-        ok: true,
-        isConfigured: !!(f2s || twSid),
-        fast2smsConfigured: !!f2s,
-        fast2smsMasked: f2s ? '••••••••' + f2s.slice(-4) : '',
-        twilioConfigured: !!twSid,
-        twilioSidMasked: twSid ? '••••••••' + twSid.slice(-4) : '',
-        twilioPhoneNumber: (db.settings && db.settings.twilioPhoneNumber) || process.env.TWILIO_PHONE_NUMBER || ''
-      });
-    }
-
-    if (req.method === 'POST' && pathname === '/api/settings/sms-gateway') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
-      const body = JSON.parse(await read(req));
-      if (!db.settings) db.settings = {};
-      if (typeof body.fast2smsApiKey === 'string') db.settings.fast2smsApiKey = body.fast2smsApiKey.trim();
-      if (typeof body.twilioSid === 'string') db.settings.twilioSid = body.twilioSid.trim();
-      if (typeof body.twilioToken === 'string') db.settings.twilioToken = body.twilioToken.trim();
-      if (typeof body.twilioPhoneNumber === 'string') db.settings.twilioPhoneNumber = body.twilioPhoneNumber.trim();
-      await saveDatabase();
-      return respond(res, 200, { ok: true, message: 'SMS Gateway settings updated successfully.' });
-    }
-
-    // 21c. SETTINGS: Database Persistence & Storage Status
-    if (req.method === 'GET' && pathname === '/api/database/status') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
-      return respond(res, 200, {
-        ok: true,
-        isKvActive: !!(KV_URL && KV_TOKEN),
-        kvProvider: KV_URL ? (KV_URL.includes('upstash') ? 'Upstash Redis' : 'Cloud KV') : 'Baseline Seed & Ephemeral Container',
-        isVercel,
-        parentCount: (db.parents || []).length,
-        childCount: (db.children || []).length,
-        deviceCount: (db.devices || []).length
-      });
-    }
-
-    // 21d. SETTINGS: Database Backup Export
-    if (req.method === 'GET' && pathname === '/api/database/backup') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="kidsafe-backup-${Date.now()}.json"`
-      });
-      return res.end(JSON.stringify(db, null, 2));
-    }
-
-    // 21e. SETTINGS: Database Backup Restore
-    if (req.method === 'POST' && pathname === '/api/database/restore') {
-      const parent = getSessionParent(req);
-      if (!parent) return respond(res, 401, { error: 'Unauthorized' });
-      const body = JSON.parse(await read(req));
-      if (!body || typeof body !== 'object' || !Array.isArray(body.parents)) {
-        return respond(res, 400, { error: 'Invalid database backup JSON structure.' });
-      }
-      db = Object.assign(db, body);
-      await saveDatabase();
-      return respond(res, 200, { ok: true, message: 'Database successfully restored.' });
-    }
-
-    // 22. SETTINGS: Delete Parent Account & All Associated Data
-    if (req.method === 'DELETE' && pathname === '/api/account') {
-      const body = JSON.parse(await read(req));
-      if (body.confirmation !== 'DELETE MY ACCOUNT') {
-        return respond(res, 400, { error: 'Please type "DELETE MY ACCOUNT" to confirm.' });
-      }
-
-      db.reports = {};
-      db.alerts = [];
-      db.limits = {};
-      db.devices = [];
-      db.pairingSessions = [];
-      await saveDatabase();
-
-      return respond(res, 200, { ok: true, message: 'Account and all data permanently deleted' }, 'application/json', {
-        'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
-      });
-    }
-
-    // 23. INGESTION: POST /api/upload (Child Android Client Sync Endpoint)
-    if (req.method === 'POST' && pathname === '/api/upload') {
       const authHeader = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+      const registeredDevice = authHeader ? await dbStore.findDeviceByToken(authHeader) : null;
 
-      // Check device token against registered devices OR fallback OR valid token length (ensures resilience across serverless instances)
-      const registeredDevice = db.devices.find(d => !d.isRevoked && equal(d.token, authHeader));
+      if (registeredDevice && registeredDevice.isRevoked) {
+        return respond(res, 401, { error: 'Device access has been revoked by parent. Please re-pair.' });
+      }
+
       const isFallback = equal(authHeader, DEVICE_FALLBACK_TOKEN);
       const isAnyValidToken = authHeader.length >= 16;
 
@@ -1710,39 +982,32 @@ async function requestHandler(req, res) {
       }
 
       const body = JSON.parse(await read(req));
-
-      // Resolve child: match by registeredDevice.childId OR body.childId OR child name OR active child
       let childId = registeredDevice ? registeredDevice.childId : body.childId;
-      let matchedChild = db.children.find(c => c.id === childId);
+      let matchedChild = childId ? await dbStore.getChildById(childId) : null;
 
-      if (!matchedChild && body.childId) {
-        matchedChild = db.children.find(c => c.id.includes(body.childId) || body.childId.includes(c.id) || (body.childName && c.name.toLowerCase() === body.childName.toLowerCase()));
-      }
       if (!matchedChild) {
-        matchedChild = db.children[0] || null;
+        return respond(res, 404, { error: 'Child profile not found. Please pair this device with your parent dashboard.' });
       }
-      if (matchedChild) {
-        childId = matchedChild.id;
-      } else if (!childId) {
-        childId = 'child-devanshi';
-      }
+      childId = matchedChild.id;
 
-      // Auto-register device to memory if this container restarted
-      if (!registeredDevice && authHeader) {
-        db.devices.push({
+      // Auto-register valid unpaired/legacy device strictly to the matched child
+      let activeDevice = registeredDevice;
+      if (!activeDevice && authHeader) {
+        activeDevice = await dbStore.upsertDevice({
           id: `dev-${Date.now()}`,
           childId,
-          deviceName: body.deviceName || 'Android Device',
-          deviceModel: body.deviceModel || 'Phone',
+          parentId: matchedChild.parentId,
+          deviceName: body.deviceName || matchedChild.deviceName || 'Android Device',
+          deviceModel: body.deviceModel || matchedChild.deviceModel || 'Phone',
           token: authHeader,
           pairedAt: Date.now(),
           lastSyncAt: Date.now(),
+          isOnline: true,
           isRevoked: false
         });
       }
 
       const day = body.day || new Date().toISOString().slice(0, 10);
-
       if (!Array.isArray(body.apps) || !Array.isArray(body.timeline)) {
         return respond(res, 400, { error: 'Malformed payload: apps and timeline arrays required' });
       }
@@ -1789,15 +1054,13 @@ async function requestHandler(req, res) {
         };
       });
 
-      if (!db.reports[childId]) db.reports[childId] = {};
-      const existing = db.reports[childId][day];
-
-      // CRITICAL PRESERVATION: If phone is currently locked/idle and sends an empty snapshot (0 apps or 0 ms),
-      // DO NOT overwrite and wipe the existing accumulated records for today!
+      const existing = await dbStore.getReportForChildDay(childId, day);
       const shouldKeepExistingApps = formattedApps.length === 0 && existing && existing.apps && existing.apps.length > 0;
       const finalApps = shouldKeepExistingApps ? existing.apps : formattedApps;
       const finalDuration = shouldKeepExistingApps ? existing.totalScreenTimeMs : Math.max(totalDurationMs, existing?.totalScreenTimeMs || 0);
-      const finalTimeline = formattedTimeline.length === 0 && existing?.timeline?.length > 0 ? existing.timeline : (formattedTimeline.length > 0 ? formattedTimeline : (existing?.timeline || []));
+      const finalTimeline = formattedTimeline.length === 0 && existing?.timeline?.length > 0
+        ? existing.timeline
+        : (formattedTimeline.length > 0 ? formattedTimeline : (existing?.timeline || []));
       const finalHourly = totalDurationMs === 0 && existing?.hourlyActivity ? existing.hourlyActivity : hourlyActivity;
       const finalCategory = totalDurationMs === 0 && existing?.categoryBreakdown ? existing.categoryBreakdown : categoryBreakdown;
       const finalUnlocks = Math.max(Number(body.screenUnlocksApprox) || 0, existing?.screenUnlocksApprox || 0);
@@ -1813,61 +1076,53 @@ async function requestHandler(req, res) {
         categoryBreakdown: finalCategory,
         receivedAt: Date.now()
       };
-
-      db.reports[childId][day] = reportData;
+      await dbStore.upsertReport(reportData);
 
       const parsedBattery = Number(body.batteryLevel);
       const validBattery = (!isNaN(parsedBattery) && parsedBattery > 0 && parsedBattery <= 100) ? parsedBattery : null;
 
-      // Mirror report to all matching children so Web Dashboard displays the exact usage immediately!
-      for (const c of db.children) {
-        if (c.id === childId || (matchedChild && c.name.toLowerCase() === matchedChild.name.toLowerCase())) {
-          if (!db.reports[c.id]) db.reports[c.id] = {};
-          db.reports[c.id][day] = reportData;
-          c.lastSyncAt = Date.now();
-          c.isOnline = true;
-          if (validBattery !== null) c.batteryLevel = validBattery;
-        }
+      const updatedChild = await dbStore.upsertChild({
+        ...matchedChild,
+        lastSyncAt: Date.now(),
+        isOnline: true,
+        batteryLevel: validBattery !== null ? validBattery : matchedChild.batteryLevel
+      });
+
+      if (activeDevice) {
+        await dbStore.upsertDevice({
+          ...activeDevice,
+          lastSyncAt: Date.now(),
+          isOnline: true,
+          batteryLevel: validBattery !== null ? validBattery : activeDevice.batteryLevel
+        });
       }
 
-      if (registeredDevice) {
-        registeredDevice.lastSyncAt = Date.now();
-        registeredDevice.isOnline = true;
-        if (validBattery !== null) registeredDevice.batteryLevel = validBattery;
-      }
-
-      // Check limits and issue alerts
-      const limits = db.limits[childId] || [];
+      const limits = await dbStore.getLimitsForChild(childId);
       for (const limit of limits) {
         const app = finalApps.find(a => a.package === limit.package);
         if (app && app.durationMs >= limit.dailyLimitMinutes * 60000) {
           const alertId = `alert-limit-${childId}-${limit.package}-${day}`;
-          if (!db.alerts.some(a => a.id === alertId)) {
-            const newAlert = {
-              id: alertId,
-              childId,
-              childName: child?.name || 'Child',
-              type: 'limit_reached',
-              title: `${limit.name} daily limit reached`,
-              description: `${child?.name || 'Child'} exceeded the ${limit.dailyLimitMinutes} min limit on ${limit.name}.`,
-              severity: 'warning',
-              timestamp: Date.now(),
-              isRead: false
-            };
-            db.alerts.unshift(newAlert);
-            broadcastEvent('new_alert', newAlert);
-          }
+          const newAlert = {
+            id: alertId,
+            childId,
+            childName: updatedChild?.name || matchedChild.name || 'Child',
+            type: 'limit_reached',
+            title: `${limit.name} daily limit reached`,
+            description: `${updatedChild?.name || matchedChild.name || 'Child'} exceeded the ${limit.dailyLimitMinutes} min limit on ${limit.name}.`,
+            severity: 'warning',
+            timestamp: Date.now(),
+            isRead: false
+          };
+          const created = await dbStore.addAlertIfNotExists(newAlert);
+          if (created) broadcastEvent('new_alert', newAlert);
         }
       }
 
-      await saveDatabase();
-
-      // Broadcast telemetry update via Server-Sent Events to both event channels!
       const eventPayload = {
         childId,
-        childName: child?.name,
+        childName: updatedChild?.name || matchedChild.name,
         syncedAt: Date.now(),
-        batteryLevel: child?.batteryLevel,
+        batteryLevel: updatedChild?.batteryLevel,
         totalScreenTimeMs: finalDuration,
         recordsCount: finalApps.length
       };
@@ -1875,6 +1130,502 @@ async function requestHandler(req, res) {
       broadcastEvent('telemetry_updated', eventPayload);
 
       return respond(res, 200, { ok: true, syncedAt: Date.now(), recordsCount: formattedApps.length });
+    }
+
+    // Allow child devices OR authenticated parents to GET /api/limits
+    if (req.method === 'GET' && pathname === '/api/limits') {
+      const parentUser = await getSessionParent(req);
+      const authHeader = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+      const device = !parentUser && authHeader ? await dbStore.findDeviceByToken(authHeader) : null;
+
+      if (!parentUser && (!device || device.isRevoked)) {
+        return respond(res, 401, { error: 'Please sign in to access limits' });
+      }
+
+      let childId = url.searchParams.get('childId');
+      if (device) {
+        childId = device.childId;
+      } else if (parentUser) {
+        const children = await dbStore.getChildrenByParent(parentUser.id);
+        const owned = children.find(c => c.id === childId) || children[0];
+        if (!owned) return respond(res, 200, { limits: [] });
+        childId = owned.id;
+      }
+
+      const limits = await dbStore.getLimitsForChild(childId);
+      return respond(res, 200, { limits });
+    }
+
+    // 13. PROTECTED PARENT MIDDLEWARE (for remaining routes)
+    const parentUser = await getSessionParent(req);
+    if (!parentUser) {
+      return respond(res, 401, { error: 'Please sign in to access parent dashboard' });
+    }
+
+    // 14. GET /api/children: List authenticated parent's children
+    if (req.method === 'GET' && pathname === '/api/children') {
+      const children = await dbStore.getChildrenByParent(parentUser.id);
+      return respond(res, 200, { children });
+    }
+
+    // 15. POST /api/children: Add or update child profile
+    if (req.method === 'POST' && pathname === '/api/children') {
+      const body = JSON.parse(await read(req));
+      if (!body.name) return respond(res, 400, { error: 'Child name is required' });
+
+      const cleanName = String(body.name).trim();
+      const targetId = body.id || `child-${Date.now()}`;
+      if (body.id) {
+        const existing = await dbStore.getChildById(body.id);
+        if (existing && existing.parentId !== parentUser.id) {
+          return respond(res, 403, { error: 'Access denied for this child profile' });
+        }
+      }
+
+      const newChild = await dbStore.upsertChild({
+        id: targetId,
+        parentId: parentUser.id,
+        name: cleanName,
+        age: Number(body.age) || 10,
+        avatar: body.avatar || cleanName.toLowerCase().replace(/[^a-z]/g, '') || 'default',
+        deviceName: body.deviceName || 'Pending Setup',
+        deviceModel: body.deviceModel || 'Android Device',
+        batteryLevel: body.batteryLevel !== undefined ? body.batteryLevel : null,
+        isOnline: false,
+        lastSyncAt: 0,
+        dailyLimitMinutes: Number(body.dailyLimitMinutes) || 120,
+        createdAt: Date.now()
+      });
+
+      broadcastEvent('child_added', { child: newChild });
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      return respond(res, 201, { ok: true, child: newChild, availableChildren: parentChildren });
+    }
+
+    // 15b. POST /api/children/delete or DELETE /api/children: Remove child profile
+    if ((req.method === 'POST' && pathname === '/api/children/delete') || (req.method === 'DELETE' && (pathname === '/api/children' || pathname.startsWith('/api/children/')))) {
+      let childId = url.searchParams.get('childId');
+      if (!childId && req.method === 'POST') {
+        try {
+          const body = JSON.parse(await read(req));
+          childId = body.childId;
+        } catch {}
+      }
+      if (!childId && pathname.startsWith('/api/children/')) {
+        childId = pathname.slice('/api/children/'.length);
+      }
+
+      if (!childId) return respond(res, 400, { error: 'Child profile ID is required' });
+
+      const removed = await dbStore.deleteChild(childId, parentUser.id);
+      if (!removed) return respond(res, 404, { error: 'Child profile not found' });
+
+      broadcastEvent('child_deleted', { childId, childName: removed.name });
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      return respond(res, 200, {
+        ok: true,
+        message: `Child profile ${removed.name} removed successfully`,
+        childId,
+        availableChildren: parentChildren
+      });
+    }
+
+    // 15c. POST /api/children/sync: Restore / sync children when running in ephemeral mode
+    if (req.method === 'POST' && pathname === '/api/children/sync') {
+      const body = JSON.parse(await read(req));
+      const incomingChildren = Array.isArray(body.children) ? body.children : [];
+      const parentChildren = await dbStore.syncMissingChildren(parentUser.id, incomingChildren);
+      return respond(res, 200, { ok: true, children: parentChildren });
+    }
+
+    // 16. GET /api/dashboard: Complete Dashboard with Freshness & Storage Indicators
+    if (req.method === 'GET' && pathname === '/api/dashboard') {
+      const statusInfo = await dbStore.getStatus();
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      const requestedChildId = url.searchParams.get('childId');
+      const child = parentChildren.find(c => c.id === requestedChildId) || parentChildren[0] || null;
+      const safeParent = sanitizeParent(parentUser);
+
+      if (!child) {
+        return respond(res, 200, {
+          parent: safeParent,
+          child: null,
+          availableChildren: [],
+          isPersistentDb: statusInfo.isPersistentDb,
+          storageProvider: statusInfo.kvProvider,
+          currentDate: new Date().toISOString().slice(0, 10),
+          summary: {
+            todayScreenTimeMs: 0,
+            yesterdayScreenTimeMs: 0,
+            totalScreenTimeMs: 0,
+            unlocksCount: 0,
+            screenUnlocksApprox: 0,
+            totalAppsUsed: 0,
+            dailyLimitMinutes: 120,
+            limitMinutes: 120,
+            remainingMinutes: 120,
+            isExceeded: false,
+            comparisonVsYesterday: 0,
+            syncStatus: 'offline',
+            freshness: 'no_device',
+            syncHealth: 'empty',
+            lastSyncFormatted: 'Never'
+          },
+          charts: {
+            hourlyActivity: Array(24).fill(0).map((_, idx) => ({
+              hour: idx,
+              label: `${idx % 12 === 0 ? 12 : idx % 12} ${idx < 12 ? 'AM' : 'PM'}`,
+              minutes: 0
+            })),
+            sevenDayTrend: [],
+            categoryDistribution: [],
+            categoryBreakdown: {}
+          },
+          mostUsedApps: [],
+          timeline: [],
+          alerts: [],
+          limits: []
+        });
+      }
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const yesterdayStr = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+
+      const [childReports, alerts, limits] = await Promise.all([
+        dbStore.getReportsForChild(child.id),
+        dbStore.getAlertsForChild(child.id),
+        dbStore.getLimitsForChild(child.id)
+      ]);
+
+      const allReportKeys = Object.keys(childReports).sort().reverse();
+      const latestReportKey = allReportKeys.find(
+        k => childReports[k] && (childReports[k].totalScreenTimeMs > 0 || (childReports[k].apps && childReports[k].apps.length > 0))
+      );
+      const latestReport = latestReportKey ? childReports[latestReportKey] : null;
+
+      let isPreservedUsage = false;
+      let activeReport = childReports[todayStr];
+
+      if (!activeReport || (!activeReport.totalScreenTimeMs && (!activeReport.apps || activeReport.apps.length === 0))) {
+        if (latestReport) {
+          activeReport = latestReport;
+          isPreservedUsage = true;
+        }
+      }
+
+      const todayReport = activeReport || {
+        totalScreenTimeMs: 0,
+        screenUnlocksApprox: 0,
+        apps: [],
+        timeline: [],
+        hourlyActivity: Array(24).fill(0),
+        categoryBreakdown: { Education: 0, Entertainment: 0, Games: 0, Social: 0, Productivity: 0, System: 0, Other: 0 }
+      };
+      const yesterdayReport = childReports[yesterdayStr] || { totalScreenTimeMs: 0 };
+
+      const sevenDayTrend = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * DAY_MS);
+        const dayKey = d.toISOString().slice(0, 10);
+        const rep = childReports[dayKey];
+        const minutes = rep ? Math.round((rep.totalScreenTimeMs || 0) / 60000) : 0;
+        const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+        sevenDayTrend.push({
+          day: dayKey,
+          label,
+          dayLabel: label,
+          minutes,
+          screenTimeMinutes: minutes,
+          limit: child.dailyLimitMinutes
+        });
+      }
+
+      const hourlyActivity = (todayReport.hourlyActivity || Array(24).fill(0)).map((mins, idx) => {
+        const hr = idx % 12 === 0 ? 12 : idx % 12;
+        const ampm = idx < 12 ? 'AM' : 'PM';
+        return { hour: idx, label: `${hr} ${ampm}`, minutes: mins };
+      });
+
+      const categoryColors = {
+        Education: '#10B981',
+        Entertainment: '#F59E0B',
+        Games: '#EC4899',
+        Social: '#8B5CF6',
+        Productivity: '#3B82F6',
+        System: '#64748B',
+        Other: '#94A3B8'
+      };
+      const catTotals = todayReport.categoryBreakdown || {};
+      const totalMins = Math.max(1, Math.round((todayReport.totalScreenTimeMs || 0) / 60000));
+      const categoryDistribution = Object.keys(catTotals).map(cat => ({
+        category: cat,
+        minutes: catTotals[cat] || 0,
+        percentage: Math.round(((catTotals[cat] || 0) / totalMins) * 100),
+        color: categoryColors[cat] || '#6366F1'
+      })).sort((a, b) => b.minutes - a.minutes);
+
+      const todayMinutes = Math.round((todayReport.totalScreenTimeMs || 0) / 60000);
+      let limitStatus = 'within_limit';
+      if (todayMinutes >= child.dailyLimitMinutes) limitStatus = 'exceeded';
+      else if (todayMinutes >= child.dailyLimitMinutes * 0.85) limitStatus = 'approaching_limit';
+
+      const timeSinceSync = child.lastSyncAt ? (Date.now() - child.lastSyncAt) : Infinity;
+      let syncStatus = 'synced';
+      let freshness = 'live';
+      if (timeSinceSync < 60000) {
+        freshness = 'live';
+        syncStatus = 'synced';
+      } else if (timeSinceSync < 15 * 60000) {
+        freshness = 'fresh';
+        syncStatus = 'synced';
+      } else if (timeSinceSync < 60 * 60000) {
+        freshness = 'delayed';
+        syncStatus = 'delayed';
+      } else {
+        freshness = 'offline';
+        syncStatus = 'offline';
+      }
+
+      const minutesAgo = Number.isFinite(timeSinceSync) ? Math.max(0, Math.round(timeSinceSync / 60000)) : null;
+      const lastSyncFormatted = minutesAgo === null ? 'Never' : (minutesAgo === 0 ? 'Just now' : `${minutesAgo}m ago`);
+
+      return respond(res, 200, {
+        child: { ...child, lastSync: child.lastSyncAt },
+        parent: safeParent,
+        availableChildren: parentChildren,
+        isPersistentDb: statusInfo.isPersistentDb,
+        storageProvider: statusInfo.kvProvider,
+        currentDate: todayStr,
+        summary: {
+          todayScreenTimeMs: todayReport.totalScreenTimeMs || 0,
+          totalScreenTimeMs: todayReport.totalScreenTimeMs || 0,
+          yesterdayScreenTimeMs: yesterdayReport.totalScreenTimeMs || 0,
+          unlocksCount: todayReport.screenUnlocksApprox || 0,
+          screenUnlocksApprox: todayReport.screenUnlocksApprox || 0,
+          totalAppsUsed: todayReport.apps?.length || 0,
+          dailyLimitMinutes: child.dailyLimitMinutes,
+          limitMinutes: child.dailyLimitMinutes,
+          remainingMinutes: child.dailyLimitMinutes - todayMinutes,
+          isExceeded: todayMinutes > child.dailyLimitMinutes,
+          comparisonVsYesterday: yesterdayReport.totalScreenTimeMs > 0
+            ? Math.round((((todayReport.totalScreenTimeMs || 0) - yesterdayReport.totalScreenTimeMs) / yesterdayReport.totalScreenTimeMs) * 100)
+            : 0,
+          limitStatus,
+          syncStatus,
+          freshness,
+          syncHealth: freshness,
+          lastSyncTimestamp: child.lastSyncAt,
+          lastSyncFormatted,
+          isPreservedUsage,
+          lastReportDay: todayReport.day || todayStr
+        },
+        charts: {
+          hourlyActivity,
+          sevenDayTrend,
+          categoryDistribution,
+          categoryBreakdown: catTotals
+        },
+        mostUsedApps: (todayReport.apps || []).slice(0, 8),
+        timeline: (todayReport.timeline || []).slice(0, 20),
+        alerts,
+        limits
+      });
+    }
+
+    // 17. GET /api/timeline: Activity Timeline Filter
+    if (req.method === 'GET' && pathname === '/api/timeline') {
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      const requestedId = url.searchParams.get('childId');
+      const targetChild = parentChildren.find(c => c.id === requestedId) || parentChildren[0];
+      if (!targetChild) return respond(res, 200, { childId: null, filter: 'today', count: 0, events: [] });
+
+      const filter = url.searchParams.get('filter') || 'today';
+      const customDate = url.searchParams.get('date');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const yesterdayStr = new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
+
+      const childReports = await dbStore.getReportsForChild(targetChild.id);
+      let events = [];
+
+      if (filter === 'today') {
+        events = childReports[todayStr]?.timeline || [];
+      } else if (filter === 'yesterday') {
+        events = childReports[yesterdayStr]?.timeline || [];
+      } else if (filter === 'custom' && customDate) {
+        events = childReports[customDate]?.timeline || [];
+      } else if (filter === 'week') {
+        for (let i = 0; i < 7; i++) {
+          const dStr = new Date(Date.now() - i * DAY_MS).toISOString().slice(0, 10);
+          if (childReports[dStr]?.timeline) {
+            events.push(...childReports[dStr].timeline);
+          }
+        }
+      }
+
+      events.sort((a, b) => b.time - a.time);
+      return respond(res, 200, { childId: targetChild.id, filter, count: events.length, events });
+    }
+
+    // 18. POST /api/limits: Save single app limit or bulk limits + daily allowance
+    if (req.method === 'POST' && pathname === '/api/limits') {
+      const body = JSON.parse(await read(req));
+      const { childId, package: pkg, name, category, dailyLimitMinutes, isBlocked, limits } = body;
+      if (!childId) return respond(res, 400, { error: 'childId is required' });
+
+      const child = await dbStore.getChildById(childId);
+      if (!child || child.parentId !== parentUser.id) {
+        return respond(res, 403, { error: 'Access denied for this child profile' });
+      }
+
+      let updatedLimits = [];
+      if (Array.isArray(limits) || (dailyLimitMinutes !== undefined && !pkg)) {
+        updatedLimits = await dbStore.replaceLimitsAndDailyLimit(
+          childId,
+          limits,
+          dailyLimitMinutes !== undefined ? Number(dailyLimitMinutes) : undefined,
+          categorize
+        );
+      } else if (pkg) {
+        const cat = categorize(pkg);
+        updatedLimits = await dbStore.upsertLimit(childId, {
+          package: pkg,
+          name: name || cat.name,
+          category: category || cat.category,
+          dailyLimitMinutes: Number(dailyLimitMinutes) || 30,
+          isBlocked: Boolean(isBlocked)
+        });
+      } else {
+        return respond(res, 400, { error: 'package or limits array is required' });
+      }
+
+      broadcastEvent('limits_updated', { childId, limits: updatedLimits });
+      return respond(res, 200, { ok: true, limits: updatedLimits });
+    }
+
+    // 19. POST /api/alerts/mark-read
+    if (req.method === 'POST' && pathname === '/api/alerts/mark-read') {
+      const body = JSON.parse(await read(req));
+      await dbStore.markAlertRead(body.alertId);
+      broadcastEvent('alert_read', { alertId: body.alertId });
+      return respond(res, 200, { ok: true });
+    }
+
+    // 20. EXPORTS: CSV & JSON
+    if (req.method === 'GET' && (pathname === '/api/export/csv' || (pathname === '/api/reports/export' && (url.searchParams.get('format') === 'csv' || !url.searchParams.get('format'))))) {
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      const requestedId = url.searchParams.get('childId');
+      const child = parentChildren.find(c => c.id === requestedId) || parentChildren[0] || { id: null, name: 'Child', deviceName: 'Android' };
+      const day = url.searchParams.get('day') || new Date().toISOString().slice(0, 10);
+      const childReports = child.id ? await dbStore.getReportsForChild(child.id) : {};
+      const report = childReports[day] || Object.values(childReports)[0] || { apps: [] };
+
+      let csv = `Date,Child Name,Device,App Name,Package,Category,Duration (Minutes),Duration (Formatted)\n`;
+      for (const app of report.apps || []) {
+        const mins = Math.round((app.durationMs || 0) / 60000);
+        const hrs = Math.floor(mins / 60);
+        const remMins = mins % 60;
+        const fmt = hrs > 0 ? `${hrs}h ${remMins}m` : `${remMins}m`;
+        csv += `"${day}","${child.name}","${child.deviceName || 'Android'}","${app.name}","${app.package}","${app.category || 'General'}",${mins},"${fmt}"\n`;
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="kidsafe-report-${(child.name || 'child').toLowerCase()}-${day}.csv"`
+      });
+      return res.end(csv);
+    }
+
+    if (req.method === 'GET' && (pathname === '/api/export/json' || (pathname === '/api/reports/export' && url.searchParams.get('format') === 'json'))) {
+      const parentChildren = await dbStore.getChildrenByParent(parentUser.id);
+      const requestedId = url.searchParams.get('childId');
+      const child = parentChildren.find(c => c.id === requestedId) || parentChildren[0] || { id: null, name: 'Child' };
+      const reports = child.id ? await dbStore.getReportsForChild(child.id) : {};
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="kidsafe-export-${(child.name || 'child').toLowerCase()}.json"`
+      });
+      return res.end(JSON.stringify({ ok: true, child, exportTimestamp: Date.now(), daysCount: Object.keys(reports).length, reports }, null, 2));
+    }
+
+    // 21. SETTINGS
+    if (req.method === 'POST' && pathname === '/api/settings/retention') {
+      const body = JSON.parse(await read(req));
+      const days = Number(body.days || body.retentionDays) || 30;
+      await dbStore.updateSettings({ dataRetentionDays: days });
+      return respond(res, 200, { ok: true, dataRetentionDays: days });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/settings/sms-gateway') {
+      const settings = await dbStore.getSettings();
+      const f2s = settings.fast2smsApiKey || process.env.FAST2SMS_API_KEY || '';
+      const twSid = settings.twilioSid || process.env.TWILIO_ACCOUNT_SID || '';
+      return respond(res, 200, {
+        ok: true,
+        isConfigured: !!(f2s || twSid),
+        fast2smsConfigured: !!f2s,
+        fast2smsMasked: f2s ? '••••••••' + f2s.slice(-4) : '',
+        twilioConfigured: !!twSid,
+        twilioSidMasked: twSid ? '••••••••' + twSid.slice(-4) : '',
+        twilioPhoneNumber: settings.twilioPhoneNumber || process.env.TWILIO_PHONE_NUMBER || ''
+      });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/settings/sms-gateway') {
+      const body = JSON.parse(await read(req));
+      const patch = {};
+      if (typeof body.fast2smsApiKey === 'string') patch.fast2smsApiKey = body.fast2smsApiKey.trim();
+      if (typeof body.twilioSid === 'string') patch.twilioSid = body.twilioSid.trim();
+      if (typeof body.twilioToken === 'string') patch.twilioToken = body.twilioToken.trim();
+      if (typeof body.twilioPhoneNumber === 'string') patch.twilioPhoneNumber = body.twilioPhoneNumber.trim();
+      await dbStore.updateSettings(patch);
+      return respond(res, 200, { ok: true, message: 'SMS Gateway settings updated successfully.' });
+    }
+
+    // 21c. SETTINGS: Database Persistence & Storage Status
+    if (req.method === 'GET' && pathname === '/api/database/status') {
+      const status = await dbStore.getStatus();
+      return respond(res, 200, { ok: true, ...status });
+    }
+
+    // 21d. SETTINGS: Database Backup Export
+    if (req.method === 'GET' && pathname === '/api/database/backup') {
+      const fullDb = await dbStore.exportFullDatabase();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="kidsafe-backup-${Date.now()}.json"`
+      });
+      return res.end(JSON.stringify(fullDb, null, 2));
+    }
+
+    // 21e. SETTINGS: Database Backup Restore
+    if (req.method === 'POST' && pathname === '/api/database/restore') {
+      const body = JSON.parse(await read(req));
+      if (!body || typeof body !== 'object' || !Array.isArray(body.parents)) {
+        return respond(res, 400, { error: 'Invalid database backup JSON structure.' });
+      }
+      await dbStore.restoreFullDatabase(body);
+      return respond(res, 200, { ok: true, message: 'Database successfully restored.' });
+    }
+
+    // 22. SETTINGS: Delete Parent Account & Associated Data
+    if ((req.method === 'DELETE' && pathname === '/api/account') || (req.method === 'POST' && pathname === '/api/settings/delete-account')) {
+      const confirmHeader = req.headers['x-confirm-delete'] === 'yes';
+      let confirmed = confirmHeader;
+      if (!confirmed) {
+        try {
+          const body = JSON.parse(await read(req));
+          confirmed = body.confirmation === 'DELETE MY ACCOUNT';
+        } catch {}
+      }
+      if (!confirmed) {
+        return respond(res, 400, { error: 'Please confirm deletion to proceed.' });
+      }
+
+      await dbStore.deleteParentAccount(parentUser.id);
+      return respond(res, 200, { ok: true, message: 'Account and all associated data permanently deleted' }, 'application/json', {
+        'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+      });
     }
 
     return respond(res, 404, { error: 'Endpoint not found' });
@@ -1888,7 +1639,7 @@ const server = http.createServer(requestHandler);
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`KidSafe Enterprise Parent Dashboard running on port ${PORT}`);
+    console.log(`KidSafe Enterprise Parent Dashboard running on port ${PORT} [${dbStore.getProviderName()}]`);
   });
 }
 
