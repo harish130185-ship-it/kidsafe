@@ -241,33 +241,6 @@ window.closeModal = function(id) {
   }
 };
 
-// Legacy Login Toggle
-const toggleLegacyBtn = $('toggleLegacyLogin');
-if (toggleLegacyBtn) {
-  toggleLegacyBtn.onclick = () => {
-    const f = $('legacyLoginForm');
-    if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
-  };
-}
-
-const legacyLoginBtn = $('legacyLoginBtn');
-if (legacyLoginBtn) {
-  legacyLoginBtn.onclick = async () => {
-    const token = $('parentKeyInput').value.trim();
-    try {
-      await api('/api/login', {
-        method: 'POST',
-        body: JSON.stringify({ token })
-      });
-      state.sessionToken = token;
-      sessionStorage.setItem('kidsafe_session', token);
-      await initDashboard();
-    } catch (err) {
-      showToast(err.message || 'Key login failed', 'error');
-    }
-  };
-}
-
 // Sign Out
 $('logoutBtn').onclick = async () => {
   if (window.AndroidBridge && window.AndroidBridge.exitKidMode) {
@@ -1510,6 +1483,7 @@ if (isAndroidPortal) {
   if (loginDlCard) loginDlCard.style.display = 'none';
   const heroDlBanner = document.querySelector('.apk-download-hero-banner');
   if (heroDlBanner) heroDlBanner.style.display = 'none';
+  document.querySelectorAll('.apk-download-inline').forEach(el => { el.style.display = 'none'; });
 } else {
   // Web Browser environment: Ensure APK Download button is fully visible in header and page
   const headerDlBtn = $('downloadApkHeaderBtn');
@@ -1540,6 +1514,6 @@ setLanguage(state.lang);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('a[href*="/download/apk"], a[href*="KidSafe-Monitor.apk"], #downloadApkHeaderBtn');
   if (btn) {
-    showToast('📥 Starting download: KidSafe-Monitor.apk (v1.0.6)... Check your downloads!', 'success');
+    showToast('📥 Starting download: KidSafe-Monitor.apk (v1.0.7)... Check your downloads!', 'success');
   }
 });

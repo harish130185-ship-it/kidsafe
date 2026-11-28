@@ -19,7 +19,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
 
         <!-- Google Play Child Monitoring Declaration -->
         <meta-data
@@ -58,6 +58,12 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <!-- Foreground Service: Transparent persistent parental monitoring status -->
+        <service
+            android:name=".service.KidSafeMonitoringService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Accessibility Service: Optional real-time App Blocking Overlay when limits are reached -->
         <service

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.*
+import com.kidsafe.monitor.data.local.SecurePrefs
 import com.kidsafe.monitor.data.remote.ApiClient
 import com.kidsafe.monitor.data.remote.PasswordLoginRequest
 import com.kidsafe.monitor.ui.ChildConsentScreen
@@ -75,7 +76,7 @@ class MainActivity : ComponentActivity() {
                 var showParentLoginDialog by remember { mutableStateOf(false) }
 
                 var loginEmail by remember {
-                    mutableStateOf(prefs.getString("parent_email", "harishshukla1385@gmail.com") ?: "harishshukla1385@gmail.com")
+                    mutableStateOf(prefs.getString("parent_email", "") ?: "")
                 }
                 var loginPassword by remember { mutableStateOf("") }
                 var isPasswordVisible by remember { mutableStateOf(false) }
@@ -188,7 +189,8 @@ class MainActivity : ComponentActivity() {
 
                                     coroutineScope.launch {
                                         try {
-                                            val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                                            val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                                            val serverUrl = if (rawUrl.startsWith("https://")) rawUrl else "https://kidsafe.railplus.in"
                                             val api = ApiClient.create(serverUrl)
                                             val resp = api.loginWithPassword(PasswordLoginRequest(email, pwd))
 
@@ -200,11 +202,9 @@ class MainActivity : ComponentActivity() {
                                                 }
                                                 val md = MessageDigest.getInstance("SHA-256")
                                                 val hash = md.digest(pwd.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
-                                                prefs.edit()
-                                                    .putString("parent_email", email)
-                                                    .putString("guardian_pwd_hash", hash)
-                                                    .putString("parent_session_token", token)
-                                                    .apply()
+                                                prefs.edit().putString("parent_email", email).apply()
+                                                SecurePrefs.putSecret(context, "guardian_pwd_hash", hash)
+                                                SecurePrefs.putSecret(context, "parent_session_token", token)
 
                                                 parentSessionToken = token
                                                 isParentModeUnlocked = true
@@ -218,12 +218,12 @@ class MainActivity : ComponentActivity() {
                                             // Offline fallback
                                             val md = MessageDigest.getInstance("SHA-256")
                                             val hash = md.digest(pwd.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
-                                            val storedHash = prefs.getString("guardian_pwd_hash", "") ?: ""
+                                            val storedHash = SecurePrefs.getSecret(context, "guardian_pwd_hash")
                                             val storedEmail = prefs.getString("parent_email", "") ?: ""
-                                            val savedToken = prefs.getString("parent_session_token", "")?.trim() ?: ""
+                                            val savedToken = SecurePrefs.getSecret(context, "parent_session_token").trim()
 
                                             if (storedHash.isNotEmpty() && hash == storedHash &&
-                                                savedToken.isNotBlank() && savedToken != "123456789" &&
+                                                savedToken.isNotBlank() &&
                                                 (storedEmail.isEmpty() || storedEmail.equals(email, ignoreCase = true))
                                             ) {
                                                 parentSessionToken = savedToken
@@ -345,8 +345,9 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.ParentPortal.route) {
-                            val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
-                            val savedToken = prefs.getString("parent_session_token", "") ?: ""
+                            val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                            val serverUrl = if (rawUrl.startsWith("https://")) rawUrl else "https://kidsafe.railplus.in"
+                            val savedToken = SecurePrefs.getSecret(context, "parent_session_token")
                             val effectiveToken = if (parentSessionToken.isNotBlank()) parentSessionToken else savedToken
                             ParentPortalScreen(
                                 serverUrl = serverUrl,

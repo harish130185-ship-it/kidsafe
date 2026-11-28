@@ -182,7 +182,7 @@ async function getSessionParent(req) {
   const authHeader = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!authHeader) return null;
 
-  if (authHeader === '123456789' || equal(authHeader, PARENT_SECRET)) {
+  if (process.env.PARENT_TOKEN && equal(authHeader, PARENT_SECRET)) {
     return dbStore.getFirstParent();
   }
   return verifyToken(authHeader);
@@ -369,6 +369,14 @@ async function requestHandler(req, res) {
       if (req.method === 'HEAD') return respond(res, 200, '', 'text/css; charset=utf-8');
       return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'style.css'), 'utf8'), 'text/css; charset=utf-8');
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && (pathname === '/privacy-policy' || pathname === '/privacy')) {
+      if (req.method === 'HEAD') return respond(res, 200, '', 'text/html; charset=utf-8');
+      return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'privacy-policy.html'), 'utf8'), 'text/html; charset=utf-8');
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && (pathname === '/delete-account' || pathname === '/account-deletion')) {
+      if (req.method === 'HEAD') return respond(res, 200, '', 'text/html; charset=utf-8');
+      return respond(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'delete-account.html'), 'utf8'), 'text/html; charset=utf-8');
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && (pathname === '/KidSafe-Monitor.apk' || pathname === '/download/apk' || pathname === '/download' || pathname === '/apk')) {
       const rootApkPath = path.join(__dirname, '..', 'KidSafe-Monitor.apk');
       const publicApkPath = path.join(__dirname, 'public', 'KidSafe-Monitor.apk');
@@ -401,11 +409,11 @@ async function requestHandler(req, res) {
     if (req.method === 'GET' && (pathname === '/api/app-version' || pathname === '/api/version')) {
       const versionInfo = {
         ok: true,
-        versionName: process.env.LATEST_APP_VERSION || '1.0.6',
-        versionCode: parseInt(process.env.LATEST_VERSION_CODE || '7', 10),
+        versionName: process.env.LATEST_APP_VERSION || '1.0.7',
+        versionCode: parseInt(process.env.LATEST_VERSION_CODE || '8', 10),
         downloadUrl: '/download/apk',
-        releaseNotes: 'KidSafe Monitor update with persistent cloud child sync and token reliability fixes',
-        publishedAt: '2026-11-28T10:30:00Z'
+        releaseNotes: 'KidSafe Monitor Play Store compliance release with encrypted storage and prominent disclosures',
+        publishedAt: '2026-11-28T14:15:00Z'
       };
       return respond(res, 200, versionInfo);
     }
@@ -748,16 +756,47 @@ async function requestHandler(req, res) {
       });
     }
 
-    // 7. AUTHENTICATION: Legacy Key Login (Backward Compatible)
+    // 7. AUTHENTICATION: Admin Secret Token Login (disabled for public demo key '123456789')
     if (req.method === 'POST' && pathname === '/api/login') {
       const body = JSON.parse(await read(req));
-      const valid = body.token === '123456789' || equal(body.token, PARENT_SECRET);
+      const valid = Boolean(process.env.PARENT_TOKEN) && equal(body.token, PARENT_SECRET);
       if (!valid) {
-        return respond(res, 401, { error: 'Invalid parent access key' });
+        return respond(res, 401, { error: 'Please sign in with your parent email and password.' });
       }
       const parent = (await dbStore.getFirstParent()) || { id: 'parent-admin', name: 'Guardian Parent', phone: '+91 98765 43210' };
       const token = createToken(parent.id);
       return respond(res, 200, { ok: true, parent: sanitizeParent(parent), token });
+    }
+
+    // 7b. SELF-SERVICE PUBLIC ACCOUNT DELETION (Play Store Web Link Requirement)
+    if (req.method === 'POST' && pathname === '/api/account/delete-by-credentials') {
+      const body = JSON.parse(await read(req));
+      const email = String(body.email || '').trim().toLowerCase();
+      const password = String(body.password || '').trim();
+      const confirmation = String(body.confirmation || '').trim();
+
+      if (!email || !password) {
+        return respond(res, 400, { error: 'Registered email and password are required.' });
+      }
+      if (confirmation !== 'DELETE') {
+        return respond(res, 400, { error: 'Please type DELETE to confirm permanent account deletion.' });
+      }
+
+      const parent = await dbStore.findParentByEmail(email);
+      if (!parent || !parent.passwordHash || !parent.salt) {
+        return respond(res, 401, { error: 'Invalid email or password.' });
+      }
+
+      const computedHash = hashPassword(password, parent.salt);
+      if (!equal(computedHash, parent.passwordHash)) {
+        return respond(res, 401, { error: 'Invalid email or password.' });
+      }
+
+      await dbStore.deleteParentAccount(parent.id);
+      return respond(res, 200, {
+        ok: true,
+        message: 'Your KidSafe parent account and all child data have been permanently deleted.'
+      });
     }
 
     // 8. PAIRING: Generate 6-digit Device Pairing Code & QR
@@ -974,10 +1013,9 @@ async function requestHandler(req, res) {
         return respond(res, 401, { error: 'Device access has been revoked by parent. Please re-pair.' });
       }
 
-      const isFallback = equal(authHeader, DEVICE_FALLBACK_TOKEN);
-      const isAnyValidToken = authHeader.length >= 16;
+      const isFallback = Boolean(process.env.DEVICE_TOKEN) && equal(authHeader, DEVICE_FALLBACK_TOKEN);
 
-      if (!registeredDevice && !isFallback && !isAnyValidToken) {
+      if (!registeredDevice && !isFallback) {
         return respond(res, 401, { error: 'Unauthorized child device. Please complete device pairing.' });
       }
 

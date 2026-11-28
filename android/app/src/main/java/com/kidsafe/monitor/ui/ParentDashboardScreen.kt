@@ -148,28 +148,30 @@ fun ParentDashboardScreen(
         isCheckingUpdate = true
         coroutineScope.launch {
             try {
-                val serverUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in") ?: "https://kidsafe.railplus.in"
+                val serverUrl = if (rawUrl.startsWith("https://")) rawUrl else "https://kidsafe.railplus.in"
                 val api = ApiClient.create(serverUrl)
                 val resp = api.checkAppVersion()
                 if (resp.isSuccessful && resp.body() != null) {
                     val ver = resp.body()!!
-                    val isVersionChanged = ver.versionCode > currentVersionCode ||
-                        !ver.versionName.trim().equals(currentVersionName.trim(), ignoreCase = true)
+                    val isVersionChanged = ver.versionCode > currentVersionCode
 
                     if (isVersionChanged) {
-                        val base = if (serverUrl.startsWith("http")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
-                        val targetUrl = if (ver.downloadUrl.startsWith("http")) ver.downloadUrl else "$base/${ver.downloadUrl.trimStart('/')}"
-
                         android.widget.Toast.makeText(
                             context,
-                            "🚀 New update found (v${ver.versionName})! Opening download...",
+                            "New update (v${ver.versionName}) available on Google Play!",
                             android.widget.Toast.LENGTH_LONG
                         ).show()
-
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val pkg = context.packageName
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                        } catch (_: Exception) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
                         }
-                        context.startActivity(intent)
                     } else {
                         android.widget.Toast.makeText(
                             context,

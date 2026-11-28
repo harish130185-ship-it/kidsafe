@@ -5,17 +5,23 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.BatteryManager
 import android.os.Build
+import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import androidx.work.*
 import com.kidsafe.monitor.MainActivity
 import com.kidsafe.monitor.data.local.AppDatabase
 import com.kidsafe.monitor.data.local.DailyReportEntity
+import com.kidsafe.monitor.data.local.SecurePrefs
 import com.kidsafe.monitor.data.local.TimelineEventEntity
 import com.kidsafe.monitor.data.remote.*
 import com.kidsafe.monitor.UsageCollector
@@ -48,9 +54,7 @@ object MonitorManager {
         }
     }
 
-    fun showPersistentNotification(context: Context) {
-        if (!isConsentGranted(context)) return
-
+    fun buildMonitoringNotification(context: Context): Notification {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -64,11 +68,6 @@ object MonitorManager {
             nm.createNotificationChannel(channel)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            return
-        }
-
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -79,7 +78,7 @@ object MonitorManager {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("KidSafe Monitoring is Active")
             .setContentText("App usage is logged for parent dashboard. Tap to manage or stop.")
@@ -87,7 +86,26 @@ object MonitorManager {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .build()
+    }
 
+    fun showPersistentNotification(context: Context) {
+        if (!isConsentGranted(context)) return
+
+        val notification = buildMonitoringNotification(context)
+
+        // Start genuine ForegroundService when permitted (gracefully fall back to notification if called from background)
+        try {
+            val svcIntent = Intent(context, KidSafeMonitoringService::class.java)
+            ContextCompat.startForegroundService(context, svcIntent)
+            return
+        } catch (_: Exception) {}
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID, notification)
     }
 
@@ -130,8 +148,38 @@ object MonitorManager {
 
     fun stopMonitoring(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        try {
+            context.stopService(Intent(context, KidSafeMonitoringService::class.java))
+        } catch (_: Exception) {}
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(NOTIFICATION_ID)
+    }
+
+    internal const val FOREGROUND_NOTIFICATION_ID = NOTIFICATION_ID
+}
+
+class KidSafeMonitoringService : Service() {
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!MonitorManager.isConsentGranted(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val notification = MonitorManager.buildMonitoringNotification(this)
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(this, MonitorManager.FOREGROUND_NOTIFICATION_ID, notification, serviceType)
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 }
 
@@ -208,13 +256,13 @@ class KidSafeSyncWorker(
             val rawUrl = prefs.getString("server_url", "https://kidsafe.railplus.in")?.trim()?.trimEnd('/') ?: "https://kidsafe.railplus.in"
             val serverUrl = if (rawUrl.isBlank()) "https://kidsafe.railplus.in" else rawUrl
 
-            val rawToken = prefs.getString("device_token", "")?.trim() ?: ""
+            val rawToken = SecurePrefs.getSecret(context, "device_token").trim()
             val deviceToken = rawToken
 
             val rawChildId = prefs.getString("child_id", "")?.trim() ?: ""
             val childId = rawChildId
 
-            if (deviceToken.isNotBlank() && childId.isNotBlank() && serverUrl.startsWith("http")) {
+            if (deviceToken.isNotBlank() && childId.isNotBlank() && serverUrl.startsWith("https://")) {
                 val api = ApiClient.create(serverUrl)
 
                 // Read real battery level accurately

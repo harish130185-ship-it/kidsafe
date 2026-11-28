@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,7 +57,7 @@ fun ParentPortalScreen(
                 navigationIcon = {
                     IconButton(onClick = onExitKidMode) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Exit to Kid Mode",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
@@ -124,7 +125,7 @@ fun ParentPortalScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             val tokenParam = sessionToken.trim()
-            val baseUrl = if (serverUrl.startsWith("http")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
+            val baseUrl = if (serverUrl.startsWith("https://")) serverUrl.trimEnd('/') else "https://kidsafe.railplus.in"
             val targetUrl = if (tokenParam.isNotBlank()) {
                 "$baseUrl/?portal=android&token=${android.net.Uri.encode(tokenParam)}"
             } else {
@@ -142,11 +143,10 @@ fun ParentPortalScreen(
 
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
-                        settings.databaseEnabled = true
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.cacheMode = WebSettings.LOAD_DEFAULT
-                        settings.userAgentString = "${settings.userAgentString} KidSafeAndroidApp/1.0.6"
+                        settings.userAgentString = "${settings.userAgentString} KidSafeAndroidApp/1.0.7"
 
                         addJavascriptInterface(AndroidBridge(onExitKidMode), "AndroidBridge")
 

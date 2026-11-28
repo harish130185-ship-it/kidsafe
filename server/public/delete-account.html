@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delete Account & Data — KidSafe Activity Monitor</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .del-wrap { max-width: 540px; margin: 48px auto; padding: 0 20px; }
+    .del-card { background: var(--card-bg, #fff); border: 1px solid var(--card-border, #e2e8f0); border-radius: 16px; padding: 28px; box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06); }
+    .warn-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin: 14px 0 18px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="del-wrap">
+    <div style="margin-bottom: 16px;">
+      <a href="/" class="btn btn-secondary" style="text-decoration: none;">← Back to KidSafe</a>
+      <a href="/privacy-policy" style="font-size: 13px; margin-left: 14px; color: var(--primary, #4f46e5);">Privacy Policy</a>
+    </div>
+    <div class="del-card">
+      <h1 style="font-size: 22px; font-weight: 800; color: #dc2626; margin-bottom: 6px;">Delete KidSafe Account & Data</h1>
+      <p style="font-size: 13.5px; color: var(--text-muted, #64748b); line-height: 1.5;">
+        Verify your parent email and password below to permanently erase your KidSafe parent account, all child profiles, paired devices, usage reports, limits, and alerts.
+      </p>
+
+      <div class="warn-box">
+        <strong>Permanent Action:</strong> Deleted accounts and activity logs cannot be recovered. Any paired child devices will immediately lose server sync access.
+      </div>
+
+      <form id="deleteAccountForm">
+        <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Registered Parent Email</label>
+        <input id="delEmail" type="email" class="login-input" placeholder="parent@gmail.com" required style="margin: 0 0 12px 0;">
+
+        <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Parent Password</label>
+        <input id="delPassword" type="password" class="login-input" placeholder="Enter your password" required style="margin: 0 0 12px 0;">
+
+        <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Type <code>DELETE</code> to confirm</label>
+        <input id="delConfirm" type="text" class="login-input" placeholder="DELETE" required style="margin: 0 0 16px 0;">
+
+        <button type="submit" id="delSubmitBtn" class="btn btn-primary" style="width: 100%; background: #dc2626; border-color: #dc2626; padding: 12px; font-weight: 700;">
+          Permanently Delete My Account & All Data
+        </button>
+      </form>
+
+      <div id="delStatus" style="margin-top: 14px; font-size: 13px; font-weight: 600;"></div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('deleteAccountForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('delStatus');
+      const btn = document.getElementById('delSubmitBtn');
+      const email = document.getElementById('delEmail').value.trim();
+      const password = document.getElementById('delPassword').value.trim();
+      const confirmation = document.getElementById('delConfirm').value.trim();
+
+      if (confirmation !== 'DELETE') {
+        status.style.color = '#dc2626';
+        status.textContent = 'Please type DELETE in uppercase to confirm.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Deleting Account...';
+      status.textContent = '';
+
+      try {
+        const res = await fetch('/api/account/delete-by-credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, confirmation })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Deletion failed');
+        localStorage.clear();
+        sessionStorage.clear();
+        status.style.color = '#16a34a';
+        status.textContent = data.message || 'Account and all associated data permanently deleted.';
+        document.getElementById('deleteAccountForm').reset();
+      } catch (err) {
+        status.style.color = '#dc2626';
+        status.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Permanently Delete My Account & All Data';
+      }
+    };
+  </script>
+</body>
+</html>
